@@ -1,5 +1,6 @@
 from app.rag.models import DocumentChunk
 from app.rag.retriever import RetrievedChunk, RetrieverService
+from app.rag.vector_store import keyword_score
 
 
 class FakeVectorStore:
@@ -25,3 +26,22 @@ def test_retriever_returns_ranked_chunks():
 
     assert results[0].score == 0.91
     assert results[0].chunk.images == ["页面编辑器/1.png"]
+
+
+def test_keyword_score_boosts_system_environment_document():
+    correct = DocumentChunk(
+        id="env::0",
+        title="关于/系统环境要求/客户端/客户端",
+        source_path="关于/系统环境要求/客户端/客户端.md",
+        content="客户端参数。软件要求：Windows、Linux、Chrome 浏览器。",
+    )
+    wrong = DocumentChunk(
+        id="window::0",
+        title="页面编辑器/工具箱/UI组件/Windows窗脚本属性",
+        source_path="页面编辑器/工具箱/UI组件/Windows窗脚本属性.md",
+        content="描述 Windows 窗组件的位置、宽度和高度。",
+    )
+
+    query = "客户端对操作系统有什么要求？"
+
+    assert keyword_score(query, correct) > keyword_score(query, wrong)
