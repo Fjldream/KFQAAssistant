@@ -11,8 +11,10 @@ def main() -> None:
     chain = create_rag_chain()
     response = chain.answer(question)
     print(response.answer)
-    for source in response.sources:
-        print(f"- {source.title} {source.source_path}")
+    if response.sources:
+        print("\n参考来源：")
+        for source in response.sources:
+            print(f"- {source.title} {source.source_path}")
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ class DeepSeekClient:
             "temperature": 0.2,
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
-        with httpx.Client(timeout=self.timeout_seconds) as client:
+        with httpx.Client(timeout=self.timeout_seconds, trust_env=False) as client:
             response = client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
