@@ -22,6 +22,7 @@ class ChromaVectorStore:
     # 将切好的 chunks 写入 Chroma，返回写入数量，供索引构建脚本展示进度。
     def rebuild(self, chunks: list[DocumentChunk]) -> int:
         self.persist_dir.mkdir(parents=True, exist_ok=True)
+        self.store.reset_collection()
         ids = [chunk.id for chunk in chunks]
         documents = [
             Document(
