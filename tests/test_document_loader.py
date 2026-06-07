@@ -23,9 +23,14 @@ def test_loader_falls_back_to_html(tmp_path: Path):
     root = tmp_path / "help"
     page_dir = root / "关于"
     page_dir.mkdir(parents=True)
-    (page_dir / "客户端.html").write_text("<h1>客户端</h1><p>支持 Windows。</p>", encoding="utf-8")
+    (page_dir / "客户端.html").write_text(
+        "<h1>客户端</h1><p>支持 Windows。</p><img src='./client.png'>",
+        encoding="utf-8",
+    )
+    (page_dir / "client.png").write_bytes(b"png")
 
     docs = load_documents(root)
 
     assert len(docs) == 1
     assert "支持 Windows" in docs[0].content
+    assert docs[0].images == ["关于/client.png"]

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.rag.image_resolver import extract_markdown_images, resolve_image_path
+from app.rag.image_resolver import extract_html_images, extract_markdown_images, resolve_image_path
 from app.rag.models import ManualDocument
 from app.rag.text_cleaner import clean_html, clean_markdown
 
@@ -38,7 +38,8 @@ def load_documents(root_dir: Path) -> list[ManualDocument]:
             images = [resolve_image_path(item, path, root_dir) for item in raw_images]
             content = clean_markdown(raw)
         else:
-            images = []
+            raw_images = extract_html_images(raw)
+            images = [resolve_image_path(item, path, root_dir) for item in raw_images]
             content = clean_html(raw)
 
         if content.strip():

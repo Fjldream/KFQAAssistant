@@ -1,6 +1,8 @@
 from pathlib import Path
 import re
 
+from bs4 import BeautifulSoup
+
 
 IMAGE_PATTERN = re.compile(r"!\[[^\]]*]\(([^)]+)\)")
 
@@ -8,6 +10,17 @@ IMAGE_PATTERN = re.compile(r"!\[[^\]]*]\(([^)]+)\)")
 # 从 Markdown 正文中提取所有图片引用路径，例如 ![](./1.png)。
 def extract_markdown_images(text: str) -> list[str]:
     return [match.strip() for match in IMAGE_PATTERN.findall(text) if match.strip()]
+
+
+# 从 HTML 正文中提取 img 标签的 src，用于让 HTML 手册也能返回截图。
+def extract_html_images(html: str) -> list[str]:
+    soup = BeautifulSoup(html, "lxml")
+    images: list[str] = []
+    for img in soup.find_all("img"):
+        src = img.get("src")
+        if src:
+            images.append(str(src).strip())
+    return [image for image in images if image]
 
 
 # 将文档中的相对图片路径解析成相对知识库根目录的 POSIX 路径。
