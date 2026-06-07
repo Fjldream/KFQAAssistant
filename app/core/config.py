@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     deepseek_api_key: str = Field(default="", repr=False)
     deepseek_base_url: str = "https://api.deepseek.com"
-    deepseek_model: str = "deepseek-chat"
+    deepseek_model: str = "deepseek-v4-flash"
     deepseek_timeout_seconds: int = 60
 
     embedding_model_name: str = "BAAI/bge-small-zh-v1.5"
