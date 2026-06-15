@@ -90,6 +90,7 @@ def print_report(results: list[EvalResult]) -> None:
         print(f"{index}. [{status}] {result.question}")
         print(f"   命中关键词: {', '.join(result.matched_keywords) or '无'}")
         print(f"   缺失关键词: {', '.join(result.missing_keywords) or '无'}")
+        print(f"   来源数量: {len(result.sources)}")
         print(f"   来源: {', '.join(result.sources) or '无'}")
         print()
 

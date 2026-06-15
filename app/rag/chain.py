@@ -1,5 +1,6 @@
 from typing import Protocol
 
+from app.rag.answer_policy import NO_ANSWER_MESSAGE, is_no_answer, normalize_answer
 from app.rag.retriever import RetrievedChunk
 from app.schemas.chat import ChatResponse, SourceSnippet
 
@@ -29,10 +30,13 @@ class RagChain:
     def answer(self, question: str) -> ChatResponse:
         retrieved = self.retriever.retrieve(question)
         if not retrieved:
-            return ChatResponse(answer="手册中没有找到相关说明。", sources=[])
+            return ChatResponse(answer=NO_ANSWER_MESSAGE, sources=[])
 
         contexts = [item.chunk.content for item in retrieved]
-        answer = self.llm.generate(question=question, contexts=contexts)
+        answer = normalize_answer(self.llm.generate(question=question, contexts=contexts))
+        if is_no_answer(answer):
+            return ChatResponse(answer=answer, sources=[])
+
         sources = [
             SourceSnippet(
                 title=item.chunk.title,
