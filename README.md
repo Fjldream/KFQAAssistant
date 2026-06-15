@@ -51,6 +51,72 @@ curl http://127.0.0.1:8000/api/health
 {"status":"ok"}
 ```
 
+问答接口：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"如何创建采集工程"}'
+```
+
+返回结构包含回答、来源片段和图片路径：
+
+```json
+{
+  "answer": "回答内容",
+  "sources": [
+    {
+      "title": "来源标题",
+      "source_path": "html/...",
+      "snippet": "命中的手册片段",
+      "images": ["html/.../1.png"],
+      "score": 0.5
+    }
+  ]
+}
+```
+
+本地默认 `DISABLE_AUTH=true`，接口不需要鉴权。部署到公司服务器时建议改为：
+
+```text
+DISABLE_AUTH=false
+APP_API_KEY=自定义内部访问密钥
+```
+
+此时调用接口需要增加请求头：
+
+```bash
+-H "x-api-key: 自定义内部访问密钥"
+```
+
+## 使用 Postman 测试接口
+
+在 Postman 中创建一个请求：
+
+```text
+POST http://127.0.0.1:8000/api/chat
+```
+
+Headers：
+
+```text
+Content-Type: application/json
+```
+
+Body 选择 `raw` 和 `JSON`，填写：
+
+```json
+{
+  "question": "如何创建采集工程"
+}
+```
+
+如果启用了 `APP_API_KEY`，还需要在 Headers 中增加：
+
+```text
+x-api-key: 自定义内部访问密钥
+```
+
 ## 命令行提问
 
 ```bash
@@ -78,6 +144,25 @@ pytest tests -v
 ```bash
 conda run -n kf-rag pytest tests -v
 ```
+
+## RAG 效果评估
+
+评估集位于 `tests/eval_questions.json`。每个问题包含：
+
+```json
+{
+  "question": "页面编辑器主要包括哪些区域？",
+  "expected_keywords": ["菜单栏", "工具栏"]
+}
+```
+
+运行评估：
+
+```bash
+python -m scripts.evaluate
+```
+
+脚本会逐题调用 RAG，并检查回答和来源片段中是否包含预期关键词。这个评估不是最终标准答案评分，而是第一阶段用来发现“检索跑偏”和“回答缺关键点”的轻量检查。
 
 ## RAG 处理流程
 
