@@ -25,3 +25,28 @@ def test_splitter_adds_stable_ids():
     chunks = split_documents([doc], chunk_size=50, chunk_overlap=5)
 
     assert chunks[0].id == "关于/客户端.md::0"
+
+
+def test_splitter_attaches_only_images_marked_inside_each_chunk():
+    doc = ManualDocument(
+        title="教程/采集工程",
+        source_path="教程/采集工程.md",
+        content=(
+            "创建采集工程第一步。\n"
+            "[[KF_IMAGE_0]]\n"
+            + ("A" * 80)
+            + "\n创建采集工程第二步。\n"
+            "[[KF_IMAGE_1]]\n"
+        ),
+        images=["教程/1.png", "教程/2.png"],
+        image_markers={
+            "[[KF_IMAGE_0]]": "教程/1.png",
+            "[[KF_IMAGE_1]]": "教程/2.png",
+        },
+    )
+
+    chunks = split_documents([doc], chunk_size=80, chunk_overlap=0)
+
+    assert chunks[0].images == ["教程/1.png"]
+    assert chunks[-1].images == ["教程/2.png"]
+    assert all("[[KF_IMAGE_" not in chunk.content for chunk in chunks)

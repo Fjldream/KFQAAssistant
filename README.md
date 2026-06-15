@@ -180,14 +180,16 @@ python -m scripts.evaluate
 ```text
 data/help 原始手册
   -> 选择 Markdown 或 HTML
-  -> 清洗正文
-  -> 提取图片路径
+  -> 在图片位置插入内部标记
+  -> 清洗正文并保留图片位置
   -> 统一成 ManualDocument
-  -> 切成 DocumentChunk
+  -> 切成 DocumentChunk，并只给相关 chunk 绑定附近图片
   -> 写入 Chroma 向量库
   -> 检索相关片段
   -> DeepSeek 生成回答
 ```
+
+图片不会直接进入向量文本，而是作为 metadata 返回。系统会先在 Markdown 图片或 HTML `img` 标签位置插入内部标记，切块时根据标记把图片绑定到对应 chunk，最后再从 chunk 正文中移除内部标记。
 
 ## 重要安全说明
 

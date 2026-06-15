@@ -14,9 +14,11 @@ def test_loader_prefers_markdown_over_html(tmp_path: Path):
     docs = load_documents(root)
 
     assert len(docs) == 1
-    assert docs[0].content == "# 简介\n\nMarkdown 正文"
+    assert "Markdown 正文" in docs[0].content
+    assert "[[KF_IMAGE_0]]" in docs[0].content
     assert docs[0].source_path.endswith("简介.md")
     assert docs[0].images == ["功能模块/页面编辑器/1.png"]
+    assert docs[0].image_markers == {"[[KF_IMAGE_0]]": "功能模块/页面编辑器/1.png"}
 
 
 def test_loader_falls_back_to_html(tmp_path: Path):
@@ -33,4 +35,6 @@ def test_loader_falls_back_to_html(tmp_path: Path):
 
     assert len(docs) == 1
     assert "支持 Windows" in docs[0].content
+    assert "[[KF_IMAGE_0]]" in docs[0].content
     assert docs[0].images == ["关于/client.png"]
+    assert docs[0].image_markers == {"[[KF_IMAGE_0]]": "关于/client.png"}

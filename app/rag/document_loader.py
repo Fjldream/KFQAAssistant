@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.rag.image_resolver import extract_html_images, extract_markdown_images, resolve_image_path
+from app.rag.image_resolver import mark_html_images, mark_markdown_images, resolve_image_path
 from app.rag.models import ManualDocument
 from app.rag.text_cleaner import clean_html, clean_markdown
 
@@ -34,13 +34,19 @@ def load_documents(root_dir: Path) -> list[ManualDocument]:
     for path in selected:
         raw = path.read_text(encoding="utf-8", errors="ignore")
         if path.suffix.lower() == ".md":
-            raw_images = extract_markdown_images(raw)
-            images = [resolve_image_path(item, path, root_dir) for item in raw_images]
-            content = clean_markdown(raw)
+            marked_raw, raw_image_markers = mark_markdown_images(raw)
+            image_markers = {
+                marker: resolve_image_path(raw_path, path, root_dir) for marker, raw_path in raw_image_markers.items()
+            }
+            images = list(image_markers.values())
+            content = clean_markdown(marked_raw)
         else:
-            raw_images = extract_html_images(raw)
-            images = [resolve_image_path(item, path, root_dir) for item in raw_images]
-            content = clean_html(raw)
+            marked_raw, raw_image_markers = mark_html_images(raw)
+            image_markers = {
+                marker: resolve_image_path(raw_path, path, root_dir) for marker, raw_path in raw_image_markers.items()
+            }
+            images = list(image_markers.values())
+            content = clean_html(marked_raw)
 
         if content.strip():
             documents.append(
@@ -49,6 +55,7 @@ def load_documents(root_dir: Path) -> list[ManualDocument]:
                     source_path=path.relative_to(root_dir).as_posix(),
                     content=content,
                     images=images,
+                    image_markers=image_markers,
                 )
             )
     return documents

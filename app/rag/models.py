@@ -8,6 +8,7 @@ class ManualDocument:
     source_path: str
     content: str
     images: list[str] = field(default_factory=list)
+    image_markers: dict[str, str] = field(default_factory=dict)
 
 
 # 表示一段可进入向量库的知识片段，保留来源和图片用于回答时追溯。
