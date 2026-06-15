@@ -3,6 +3,8 @@ import os
 import requests
 import streamlit as st
 
+from image_paths import resolve_demo_image_path
+
 
 API_URL = os.getenv("KF_RAG_API_URL", "http://127.0.0.1:8000/api/chat")
 
@@ -25,4 +27,8 @@ if st.button("提问") and question.strip():
         st.code(source["source_path"])
         st.write(source["snippet"])
         for image in source.get("images", []):
-            st.image(image, caption=image)
+            resolved_image = resolve_demo_image_path(image)
+            if resolved_image:
+                st.image(resolved_image, caption=image)
+            else:
+                st.caption(f"图片文件不存在：{image}")
