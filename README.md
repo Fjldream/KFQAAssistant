@@ -25,6 +25,15 @@ cp .env.example .env
 
 默认 DeepSeek 模型是 `deepseek-v4-flash`。这是 DeepSeek 官方当前支持的模型之一，适合第一版产品问答的速度和成本需求。
 
+常用配置：
+
+```text
+TOP_K=5
+MAX_IMAGES_PER_SOURCE=5
+```
+
+`TOP_K` 控制每次检索返回多少个相关片段；`MAX_IMAGES_PER_SOURCE` 控制每个来源最多返回多少张图片，避免前端一次展示过多截图。
+
 ## 构建索引
 
 ```bash

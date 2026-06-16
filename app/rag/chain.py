@@ -20,7 +20,7 @@ class LLMProtocol(Protocol):
 
 
 # 将检索结果整理成 API 来源列表：同一 source_path 只展示一次，并合并图片。
-def _build_sources(retrieved: list[RetrievedChunk]) -> list[SourceSnippet]:
+def _build_sources(retrieved: list[RetrievedChunk], max_images_per_source: int) -> list[SourceSnippet]:
     sources_by_path: dict[str, SourceSnippet] = {}
     for item in retrieved:
         source_path = item.chunk.source_path
@@ -30,12 +30,14 @@ def _build_sources(retrieved: list[RetrievedChunk]) -> list[SourceSnippet]:
                 title=item.chunk.title,
                 source_path=source_path,
                 snippet=item.chunk.content[:300],
-                images=list(item.chunk.images),
+                images=list(item.chunk.images[:max_images_per_source]),
                 score=item.score,
             )
             continue
 
         for image in item.chunk.images:
+            if len(existing.images) >= max_images_per_source:
+                break
             if image not in existing.images:
                 existing.images.append(image)
         if item.score is not None and (existing.score is None or item.score > existing.score):
@@ -46,9 +48,10 @@ def _build_sources(retrieved: list[RetrievedChunk]) -> list[SourceSnippet]:
 # 串联检索器和大模型，把用户问题转换成带来源的问答响应。
 class RagChain:
     # 注入检索器和 LLM，便于测试时使用假对象，生产时使用真实服务。
-    def __init__(self, retriever: RetrieverProtocol, llm: LLMProtocol) -> None:
+    def __init__(self, retriever: RetrieverProtocol, llm: LLMProtocol, max_images_per_source: int = 5) -> None:
         self.retriever = retriever
         self.llm = llm
+        self.max_images_per_source = max_images_per_source
 
     # 执行完整 RAG 问答流程：检索资料、生成回答、整理来源和图片。
     def answer(self, question: str) -> ChatResponse:
@@ -64,4 +67,4 @@ class RagChain:
         if is_no_answer(answer):
             return ChatResponse(answer=answer, sources=[])
 
-        return ChatResponse(answer=answer, sources=_build_sources(retrieved))
+        return ChatResponse(answer=answer, sources=_build_sources(retrieved, self.max_images_per_source))

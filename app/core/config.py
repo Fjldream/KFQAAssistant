@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     chroma_persist_dir: Path = Path("storage/chroma")
     data_dir: Path = Path("data/help")
     top_k: int = 5
+    max_images_per_source: int = 5
 
 
 @lru_cache

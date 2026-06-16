@@ -45,6 +45,22 @@ class FakeDuplicateSourceRetriever:
         ]
 
 
+class FakeManyImagesRetriever:
+    def retrieve(self, query: str):
+        return [
+            RetrievedChunk(
+                chunk=DocumentChunk(
+                    id="doc::0",
+                    title="教程",
+                    source_path="教程/采集.md",
+                    content="采集工程截图很多。",
+                    images=[f"教程/{index}.png" for index in range(1, 9)],
+                ),
+                score=0.9,
+            )
+        ]
+
+
 class FakeLLM:
     def generate(self, question: str, contexts: list[str]) -> str:
         assert "页面编辑器包括菜单栏" in contexts[0]
@@ -114,3 +130,11 @@ def test_rag_chain_deduplicates_sources_without_dropping_llm_contexts():
     assert len(response.sources) == 1
     assert response.sources[0].source_path == "数采管理/工程开发-Windows.md"
     assert response.sources[0].images == ["数采管理/1.png", "数采管理/2.png"]
+
+
+def test_rag_chain_limits_images_per_source():
+    chain = RagChain(retriever=FakeManyImagesRetriever(), llm=FakeContextCountingLLM(), max_images_per_source=5)
+
+    response = chain.answer("如何创建采集工程？")
+
+    assert response.sources[0].images == ["教程/1.png", "教程/2.png", "教程/3.png", "教程/4.png", "教程/5.png"]
