@@ -11,4 +11,5 @@ venv/
 storage/chroma/
 storage/processed/
 data/
+docs/learning_notes/
 *.log
