@@ -12,4 +12,5 @@ storage/chroma/
 storage/processed/
 data/
 docs/learning_notes/
+docs/superpowers/
 *.log
