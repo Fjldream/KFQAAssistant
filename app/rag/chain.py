@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from app.rag.answer_policy import NO_ANSWER_MESSAGE, is_no_answer, normalize_answer
+from app.rag.answer_policy import NO_ANSWER_MESSAGE, is_missing_required_terms, is_no_answer, normalize_answer
 from app.rag.retriever import RetrievedChunk
 from app.schemas.chat import ChatResponse, SourceSnippet
 
@@ -33,6 +33,9 @@ class RagChain:
             return ChatResponse(answer=NO_ANSWER_MESSAGE, sources=[])
 
         contexts = [item.chunk.content for item in retrieved]
+        if is_missing_required_terms(question=question, contexts=contexts):
+            return ChatResponse(answer=NO_ANSWER_MESSAGE, sources=[])
+
         answer = normalize_answer(self.llm.generate(question=question, contexts=contexts))
         if is_no_answer(answer):
             return ChatResponse(answer=answer, sources=[])

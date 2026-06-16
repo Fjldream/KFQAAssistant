@@ -30,6 +30,15 @@ class FakeNoAnswerLLM:
         return "手册中没有找到相关说明。"
 
 
+class CountingLLM:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate(self, question: str, contexts: list[str]) -> str:
+        self.calls += 1
+        return "这里是模型回答。"
+
+
 def test_rag_chain_returns_answer_sources_and_images():
     chain = RagChain(retriever=FakeRetriever(), llm=FakeLLM())
 
@@ -47,3 +56,14 @@ def test_rag_chain_hides_sources_when_model_refuses_to_answer():
 
     assert response.answer == "手册中没有找到相关说明。"
     assert response.sources == []
+
+
+def test_rag_chain_refuses_when_required_query_term_is_missing_from_context():
+    llm = CountingLLM()
+    chain = RagChain(retriever=FakeRetriever(), llm=llm)
+
+    response = chain.answer("手册里有没有微信登录说明？")
+
+    assert response.answer == "手册中没有找到相关说明。"
+    assert response.sources == []
+    assert llm.calls == 0

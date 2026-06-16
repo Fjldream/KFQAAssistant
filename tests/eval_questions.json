@@ -1,22 +1,44 @@
 [
   {
     "question": "页面编辑器主要包括哪些区域？",
-    "expected_keywords": ["菜单栏", "工具栏", "工具箱", "配置窗"]
+    "expected_keywords": ["菜单栏", "工具栏", "工具箱", "配置窗"],
+    "expected_source_keywords": ["页面编辑器"],
+    "expect_images": false,
+    "expect_no_answer": false
   },
   {
     "question": "客户端对操作系统有什么要求？",
-    "expected_keywords": ["Windows", "Linux", "Chrome"]
+    "expected_keywords": ["Windows", "Linux", "Chrome"],
+    "expected_source_keywords": ["系统环境要求/客户端"],
+    "expect_images": false,
+    "expect_no_answer": false
   },
   {
     "question": "如何进入页面编辑器？",
-    "expected_keywords": ["页面管理", "双击", "页面编辑器"]
+    "expected_keywords": ["页面管理", "双击", "页面编辑器"],
+    "expected_source_keywords": ["页面编辑器"],
+    "expect_images": false,
+    "expect_no_answer": false
   },
   {
     "question": "工具栏支持哪些编辑操作？",
-    "expected_keywords": ["保存", "撤销", "重做"]
+    "expected_keywords": ["保存", "撤销", "重做"],
+    "expected_source_keywords": ["工具栏"],
+    "expect_images": false,
+    "expect_no_answer": false
   },
   {
     "question": "手册里有没有微信登录说明？",
-    "expected_keywords": ["手册中没有找到相关说明"]
+    "expected_keywords": ["手册中没有找到相关说明"],
+    "expected_source_keywords": [],
+    "expect_images": false,
+    "expect_no_answer": true
+  },
+  {
+    "question": "如何创建采集工程？",
+    "expected_keywords": ["新建工程", "名称"],
+    "expected_source_keywords": ["数采管理/工程开发-Windows"],
+    "expect_images": false,
+    "expect_no_answer": false
   }
 ]
