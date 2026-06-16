@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 
 
 IMAGE_PATTERN = re.compile(r"!\[[^\]]*]\(([^)]+)\)")
+HTML_IMAGE_PATTERN = re.compile(r"<img\b[^>]*\bsrc=[\"']([^\"']+)[\"'][^>]*>", re.IGNORECASE)
 IMAGE_MARKER_PATTERN = re.compile(r"\[\[KF_IMAGE_\d+]]")
 
 
@@ -33,13 +34,21 @@ def extract_html_images(html: str) -> list[str]:
 def mark_markdown_images(text: str) -> tuple[str, dict[str, str]]:
     markers: dict[str, str] = {}
 
-    def replace(match: re.Match[str]) -> str:
+    def replace_markdown_image(match: re.Match[str]) -> str:
         raw_path = match.group(1).strip()
         marker = make_image_marker(len(markers))
         markers[marker] = raw_path
         return f"\n{marker}\n"
 
-    return IMAGE_PATTERN.sub(replace, text), markers
+    def replace_html_image(match: re.Match[str]) -> str:
+        raw_path = match.group(1).strip()
+        marker = make_image_marker(len(markers))
+        markers[marker] = raw_path
+        return f"\n{marker}\n"
+
+    marked_text = IMAGE_PATTERN.sub(replace_markdown_image, text)
+    marked_text = HTML_IMAGE_PATTERN.sub(replace_html_image, marked_text)
+    return marked_text, markers
 
 
 # 将 HTML img 标签替换为内部位置标记，并返回标记到原始图片路径的映射。

@@ -17,6 +17,19 @@ def test_mark_markdown_images_preserves_image_position_with_marker():
     assert markers == {"[[KF_IMAGE_0]]": "./1.png"}
 
 
+def test_mark_markdown_images_also_marks_inline_html_images():
+    text = "第一步。\n![](./1.png)\n第二步。\n<img src='.\\2.png' alt='2'/>"
+
+    marked, markers = mark_markdown_images(text)
+
+    assert "[[KF_IMAGE_0]]" in marked
+    assert "[[KF_IMAGE_1]]" in marked
+    assert markers == {
+        "[[KF_IMAGE_0]]": "./1.png",
+        "[[KF_IMAGE_1]]": ".\\2.png",
+    }
+
+
 def test_mark_html_images_preserves_image_position_with_marker():
     html = "<p>第一步。</p><img src='./1.png'><p>第二步。</p>"
 
