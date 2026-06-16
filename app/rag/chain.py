@@ -19,6 +19,30 @@ class LLMProtocol(Protocol):
         ...
 
 
+# 将检索结果整理成 API 来源列表：同一 source_path 只展示一次，并合并图片。
+def _build_sources(retrieved: list[RetrievedChunk]) -> list[SourceSnippet]:
+    sources_by_path: dict[str, SourceSnippet] = {}
+    for item in retrieved:
+        source_path = item.chunk.source_path
+        existing = sources_by_path.get(source_path)
+        if existing is None:
+            sources_by_path[source_path] = SourceSnippet(
+                title=item.chunk.title,
+                source_path=source_path,
+                snippet=item.chunk.content[:300],
+                images=list(item.chunk.images),
+                score=item.score,
+            )
+            continue
+
+        for image in item.chunk.images:
+            if image not in existing.images:
+                existing.images.append(image)
+        if item.score is not None and (existing.score is None or item.score > existing.score):
+            existing.score = item.score
+    return list(sources_by_path.values())
+
+
 # 串联检索器和大模型，把用户问题转换成带来源的问答响应。
 class RagChain:
     # 注入检索器和 LLM，便于测试时使用假对象，生产时使用真实服务。
@@ -40,14 +64,4 @@ class RagChain:
         if is_no_answer(answer):
             return ChatResponse(answer=answer, sources=[])
 
-        sources = [
-            SourceSnippet(
-                title=item.chunk.title,
-                source_path=item.chunk.source_path,
-                snippet=item.chunk.content[:300],
-                images=item.chunk.images,
-                score=item.score,
-            )
-            for item in retrieved
-        ]
-        return ChatResponse(answer=answer, sources=sources)
+        return ChatResponse(answer=answer, sources=_build_sources(retrieved))

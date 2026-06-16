@@ -19,10 +19,45 @@ class FakeRetriever:
         ]
 
 
+class FakeDuplicateSourceRetriever:
+    def retrieve(self, query: str):
+        return [
+            RetrievedChunk(
+                chunk=DocumentChunk(
+                    id="doc::0",
+                    title="采集工程",
+                    source_path="数采管理/工程开发-Windows.md",
+                    content="第一段：点击新建工程。",
+                    images=["数采管理/1.png"],
+                ),
+                score=0.9,
+            ),
+            RetrievedChunk(
+                chunk=DocumentChunk(
+                    id="doc::1",
+                    title="采集工程",
+                    source_path="数采管理/工程开发-Windows.md",
+                    content="第二段：填写名称。",
+                    images=["数采管理/1.png", "数采管理/2.png"],
+                ),
+                score=0.8,
+            ),
+        ]
+
+
 class FakeLLM:
     def generate(self, question: str, contexts: list[str]) -> str:
         assert "页面编辑器包括菜单栏" in contexts[0]
         return "页面编辑器主要包括菜单栏、工具栏、工具箱和配置窗。"
+
+
+class FakeContextCountingLLM:
+    def __init__(self) -> None:
+        self.contexts: list[str] = []
+
+    def generate(self, question: str, contexts: list[str]) -> str:
+        self.contexts = contexts
+        return "创建采集工程时，点击新建工程并填写名称。"
 
 
 class FakeNoAnswerLLM:
@@ -67,3 +102,15 @@ def test_rag_chain_refuses_when_required_query_term_is_missing_from_context():
     assert response.answer == "手册中没有找到相关说明。"
     assert response.sources == []
     assert llm.calls == 0
+
+
+def test_rag_chain_deduplicates_sources_without_dropping_llm_contexts():
+    llm = FakeContextCountingLLM()
+    chain = RagChain(retriever=FakeDuplicateSourceRetriever(), llm=llm)
+
+    response = chain.answer("如何创建采集工程？")
+
+    assert llm.contexts == ["第一段：点击新建工程。", "第二段：填写名称。"]
+    assert len(response.sources) == 1
+    assert response.sources[0].source_path == "数采管理/工程开发-Windows.md"
+    assert response.sources[0].images == ["数采管理/1.png", "数采管理/2.png"]
