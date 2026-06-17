@@ -1,6 +1,6 @@
 from app.rag.models import DocumentChunk
 from app.rag.retriever import RetrievedChunk, RetrieverService
-from app.rag.vector_store import keyword_score
+from app.rag.vector_store import diversify_results, keyword_score
 
 
 class FakeVectorStore:
@@ -45,3 +45,45 @@ def test_keyword_score_boosts_system_environment_document():
     query = "客户端对操作系统有什么要求？"
 
     assert keyword_score(query, correct) > keyword_score(query, wrong)
+
+
+def test_diversify_results_prefers_different_sources_before_filling_duplicates():
+    results = [
+        RetrievedChunk(
+            chunk=DocumentChunk(id="a::0", title="A", source_path="A.md", content="高分片段"),
+            score=0.95,
+        ),
+        RetrievedChunk(
+            chunk=DocumentChunk(id="a::1", title="A", source_path="A.md", content="次高分片段"),
+            score=0.94,
+        ),
+        RetrievedChunk(
+            chunk=DocumentChunk(id="b::0", title="B", source_path="B.md", content="不同来源"),
+            score=0.80,
+        ),
+    ]
+
+    diversified = diversify_results(results, top_k=2)
+
+    assert [item.chunk.id for item in diversified] == ["a::0", "b::0"]
+
+
+def test_diversify_results_fills_remaining_slots_with_high_score_duplicates():
+    results = [
+        RetrievedChunk(
+            chunk=DocumentChunk(id="a::0", title="A", source_path="A.md", content="高分片段"),
+            score=0.95,
+        ),
+        RetrievedChunk(
+            chunk=DocumentChunk(id="a::1", title="A", source_path="A.md", content="次高分片段"),
+            score=0.94,
+        ),
+        RetrievedChunk(
+            chunk=DocumentChunk(id="b::0", title="B", source_path="B.md", content="不同来源"),
+            score=0.80,
+        ),
+    ]
+
+    diversified = diversify_results(results, top_k=3)
+
+    assert [item.chunk.id for item in diversified] == ["a::0", "b::0", "a::1"]

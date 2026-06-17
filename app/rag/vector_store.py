@@ -35,6 +35,31 @@ def keyword_score(query: str, chunk: DocumentChunk) -> float:
     return score
 
 
+# 对已排序的检索结果做来源多样性筛选，优先覆盖更多不同 source_path。
+def diversify_results(results: list[RetrievedChunk], top_k: int) -> list[RetrievedChunk]:
+    selected: list[RetrievedChunk] = []
+    selected_ids: set[str] = set()
+    used_sources: set[str] = set()
+
+    for item in results:
+        if item.chunk.source_path in used_sources:
+            continue
+        selected.append(item)
+        selected_ids.add(item.chunk.id)
+        used_sources.add(item.chunk.source_path)
+        if len(selected) == top_k:
+            return selected
+
+    for item in results:
+        if item.chunk.id in selected_ids:
+            continue
+        selected.append(item)
+        if len(selected) == top_k:
+            return selected
+
+    return selected
+
+
 # Chroma 向量库封装，负责写入 chunks 和执行相似度检索。
 class ChromaVectorStore:
     # 初始化 Chroma collection，并绑定 embedding 函数和持久化目录。
@@ -84,7 +109,7 @@ class ChromaVectorStore:
             key=lambda item: (item.score or 0.0) + keyword_score(query, item.chunk) * 0.08,
             reverse=True,
         )
-        return ranked[:top_k]
+        return diversify_results(ranked, top_k)
 
     # 将 LangChain Document 还原为业务层 DocumentChunk。
     def _document_to_chunk(self, document: Document) -> DocumentChunk:
