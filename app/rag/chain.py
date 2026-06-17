@@ -1,3 +1,4 @@
+import re
 from typing import Protocol
 
 from app.rag.answer_policy import NO_ANSWER_MESSAGE, is_missing_required_terms, is_no_answer, normalize_answer
@@ -59,6 +60,15 @@ def _build_contexts(retrieved: list[RetrievedChunk]) -> list[str]:
     return contexts
 
 
+# 确保有效回答至少带有资料编号引用，避免模型忘记按 prompt 输出引用。
+def _ensure_answer_citations(answer: str, evidence_count: int) -> str:
+    if evidence_count <= 0 or re.search(r"\[资料\s+\d+\]", answer):
+        return answer
+
+    references = "、".join(f"[资料 {index}]" for index in range(1, evidence_count + 1))
+    return f"{answer}\n\n参考：{references}"
+
+
 # 串联检索器和大模型，把用户问题转换成带来源的问答响应。
 class RagChain:
     # 注入检索器和 LLM，便于测试时使用假对象，生产时使用真实服务。
@@ -81,4 +91,5 @@ class RagChain:
         if is_no_answer(answer):
             return ChatResponse(answer=answer, sources=[])
 
+        answer = _ensure_answer_citations(answer, len(retrieved))
         return ChatResponse(answer=answer, sources=_build_sources(retrieved, self.max_images_per_source))

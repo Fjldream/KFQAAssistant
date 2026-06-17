@@ -81,6 +81,11 @@ class FakeNoAnswerLLM:
         return "手册中没有找到相关说明。"
 
 
+class FakeCitedLLM:
+    def generate(self, question: str, contexts: list[str]) -> str:
+        return "页面编辑器主要包括菜单栏、工具栏、工具箱和配置窗。[资料 1]"
+
+
 class CountingLLM:
     def __init__(self) -> None:
         self.calls = 0
@@ -96,8 +101,17 @@ def test_rag_chain_returns_answer_sources_and_images():
     response = chain.answer("页面编辑器有哪些区域？")
 
     assert "菜单栏" in response.answer
+    assert "参考：[资料 1]" in response.answer
     assert response.sources[0].source_path == "页面编辑器/简介.md"
     assert response.sources[0].images == ["页面编辑器/1.png"]
+
+
+def test_rag_chain_does_not_duplicate_existing_citations():
+    chain = RagChain(retriever=FakeRetriever(), llm=FakeCitedLLM())
+
+    response = chain.answer("页面编辑器有哪些区域？")
+
+    assert response.answer == "页面编辑器主要包括菜单栏、工具栏、工具箱和配置窗。[资料 1]"
 
 
 def test_rag_chain_hides_sources_when_model_refuses_to_answer():
