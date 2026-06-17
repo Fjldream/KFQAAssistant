@@ -7,6 +7,11 @@ SYSTEM_PROMPT = """你是 KF 产品手册问答助手。
 不要编造菜单、按钮、版本号或配置路径。
 优先用简洁步骤回答产品使用问题。"""
 
+ANSWER_REQUIREMENTS = """回答要求：
+1. 关键步骤或结论后标注资料编号，例如：[资料 1]。
+2. 只能引用手册片段中已经出现的资料编号。
+3. 如果手册片段中没有答案，只输出固定句子：手册中没有找到相关说明。"""
+
 
 # DeepSeek API 客户端，负责把检索上下文发送给大模型生成回答。
 class DeepSeekClient:
@@ -24,7 +29,7 @@ class DeepSeekClient:
             "model": self.model,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"问题：{question}\n\n手册片段：\n{context_text}"},
+                {"role": "user", "content": f"问题：{question}\n\n{ANSWER_REQUIREMENTS}\n\n手册片段：\n{context_text}"},
             ],
             "temperature": 0.2,
         }
