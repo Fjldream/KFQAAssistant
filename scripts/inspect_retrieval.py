@@ -2,7 +2,7 @@ import argparse
 
 from app.rag.factory import create_vector_store
 from app.rag.retriever import RetrievedChunk, RetrieverService
-from app.rag.vector_store import keyword_score
+from app.rag.vector_store import combined_score, keyword_score
 
 
 # 截取片段预览，避免调试输出被长文本淹没。
@@ -23,6 +23,7 @@ def format_retrieval_results(query: str, results: list[RetrievedChunk]) -> str:
                 f"Rank {index}",
                 f"  向量分: {vector_score:.2f}",
                 f"  关键词分: {keyword:.2f}",
+                f"  综合分: {combined_score(query, item):.2f}",
                 f"  标题: {chunk.title}",
                 f"  来源: {chunk.source_path}",
                 f"  图片: {', '.join(chunk.images) or '无'}",

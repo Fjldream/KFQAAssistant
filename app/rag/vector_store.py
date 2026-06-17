@@ -8,6 +8,9 @@ from app.rag.models import DocumentChunk
 from app.rag.retriever import RetrievedChunk
 
 
+KEYWORD_SCORE_WEIGHT = 0.08
+
+
 # 从中文问题中扩展关键词，补足“操作系统”等问法和手册里的“系统环境/软件要求”之间的表达差异。
 def expand_query_terms(query: str) -> list[str]:
     terms = re.findall(r"[A-Za-z0-9_.+-]+|[\u4e00-\u9fff]+", query)
@@ -33,6 +36,11 @@ def keyword_score(query: str, chunk: DocumentChunk) -> float:
         if term in chunk.content:
             score += 1.0
     return score
+
+
+# 计算最终排序分：向量相关性分加上加权后的关键词匹配分。
+def combined_score(query: str, item: RetrievedChunk) -> float:
+    return (item.score or 0.0) + keyword_score(query, item.chunk) * KEYWORD_SCORE_WEIGHT
 
 
 # 对已排序的检索结果做来源多样性筛选，优先覆盖更多不同 source_path。
@@ -106,7 +114,7 @@ class ChromaVectorStore:
 
         ranked = sorted(
             candidates.values(),
-            key=lambda item: (item.score or 0.0) + keyword_score(query, item.chunk) * 0.08,
+            key=lambda item: combined_score(query, item),
             reverse=True,
         )
         return diversify_results(ranked, top_k)

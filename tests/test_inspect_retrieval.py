@@ -23,6 +23,7 @@ def test_format_retrieval_results_includes_rank_scores_sources_and_images():
     assert "Rank 1" in output
     assert "向量分: 0.91" in output
     assert "关键词分:" in output
+    assert "综合分:" in output
     assert "页面编辑器/简介.md" in output
     assert "页面编辑器/1.png" in output
     assert "菜单栏" in output

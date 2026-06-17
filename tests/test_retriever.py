@@ -1,6 +1,6 @@
 from app.rag.models import DocumentChunk
 from app.rag.retriever import RetrievedChunk, RetrieverService
-from app.rag.vector_store import diversify_results, keyword_score
+from app.rag.vector_store import combined_score, diversify_results, keyword_score
 
 
 class FakeVectorStore:
@@ -45,6 +45,18 @@ def test_keyword_score_boosts_system_environment_document():
     query = "客户端对操作系统有什么要求？"
 
     assert keyword_score(query, correct) > keyword_score(query, wrong)
+
+
+def test_combined_score_adds_vector_score_and_weighted_keyword_score():
+    chunk = DocumentChunk(
+        id="doc::0",
+        title="页面编辑器/简介",
+        source_path="页面编辑器/简介.md",
+        content="页面编辑器包括菜单栏。",
+    )
+    item = RetrievedChunk(chunk=chunk, score=0.5)
+
+    assert combined_score("页面编辑器有哪些区域？", item) == 0.5 + keyword_score("页面编辑器有哪些区域？", chunk) * 0.08
 
 
 def test_diversify_results_prefers_different_sources_before_filling_duplicates():
