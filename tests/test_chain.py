@@ -126,7 +126,10 @@ def test_rag_chain_deduplicates_sources_without_dropping_llm_contexts():
 
     response = chain.answer("如何创建采集工程？")
 
-    assert llm.contexts == ["第一段：点击新建工程。", "第二段：填写名称。"]
+    assert llm.contexts == [
+        "[资料 1]\n标题：采集工程\n来源：数采管理/工程开发-Windows.md\n内容：\n第一段：点击新建工程。",
+        "[资料 2]\n标题：采集工程\n来源：数采管理/工程开发-Windows.md\n内容：\n第二段：填写名称。",
+    ]
     assert len(response.sources) == 1
     assert response.sources[0].source_path == "数采管理/工程开发-Windows.md"
     assert response.sources[0].images == ["数采管理/1.png", "数采管理/2.png"]

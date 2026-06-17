@@ -45,6 +45,20 @@ def _build_sources(retrieved: list[RetrievedChunk], max_images_per_source: int) 
     return list(sources_by_path.values())
 
 
+# 将检索片段格式化为带标题和来源的证据块，帮助大模型理解每段资料的出处。
+def _build_contexts(retrieved: list[RetrievedChunk]) -> list[str]:
+    contexts: list[str] = []
+    for index, item in enumerate(retrieved, start=1):
+        chunk = item.chunk
+        contexts.append(
+            f"[资料 {index}]\n"
+            f"标题：{chunk.title}\n"
+            f"来源：{chunk.source_path}\n"
+            f"内容：\n{chunk.content}"
+        )
+    return contexts
+
+
 # 串联检索器和大模型，把用户问题转换成带来源的问答响应。
 class RagChain:
     # 注入检索器和 LLM，便于测试时使用假对象，生产时使用真实服务。
@@ -59,7 +73,7 @@ class RagChain:
         if not retrieved:
             return ChatResponse(answer=NO_ANSWER_MESSAGE, sources=[])
 
-        contexts = [item.chunk.content for item in retrieved]
+        contexts = _build_contexts(retrieved)
         if is_missing_required_terms(question=question, contexts=contexts):
             return ChatResponse(answer=NO_ANSWER_MESSAGE, sources=[])
 
