@@ -77,7 +77,7 @@ def _build_contexts(retrieved: list[RetrievedChunk]) -> list[str]:
 
 # 确保有效回答至少带有资料编号引用，避免模型忘记按 prompt 输出引用。
 def _ensure_answer_citations(answer: str, evidence_count: int) -> str:
-    if evidence_count <= 0 or re.search(r"\[资料\s+\d+\]", answer):
+    if evidence_count <= 0 or re.search(r"\[资料\s*\d+\]", answer):
         return answer
 
     references = "、".join(f"[资料 {index}]" for index in range(1, evidence_count + 1))

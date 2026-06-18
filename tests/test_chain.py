@@ -112,6 +112,12 @@ class FakeCitedLLM:
         return "页面编辑器主要包括菜单栏、工具栏、工具箱和配置窗。[资料 1]"
 
 
+# 模拟模型输出无空格资料编号的情况。
+class FakeCompactCitedLLM:
+    def generate(self, question: str, contexts: list[str]) -> str:
+        return "页面编辑器主要包括菜单栏、工具栏、工具箱和配置窗。[资料1]"
+
+
 class CountingLLM:
     def __init__(self) -> None:
         self.calls = 0
@@ -139,6 +145,15 @@ def test_rag_chain_does_not_duplicate_existing_citations():
     response = chain.answer("页面编辑器有哪些区域？")
 
     assert response.answer == "页面编辑器主要包括菜单栏、工具栏、工具箱和配置窗。[资料 1]"
+
+
+# 验证模型输出“[资料1]”时不会被误判成缺少引用。
+def test_rag_chain_accepts_compact_existing_citations():
+    chain = RagChain(retriever=FakeRetriever(), llm=FakeCompactCitedLLM())
+
+    response = chain.answer("页面编辑器有哪些区域？")
+
+    assert response.answer == "页面编辑器主要包括菜单栏、工具栏、工具箱和配置窗。[资料1]"
 
 
 def test_rag_chain_hides_sources_when_model_refuses_to_answer():
