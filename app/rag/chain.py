@@ -20,27 +20,38 @@ class LLMProtocol(Protocol):
         ...
 
 
-# 将检索结果整理成 API 来源列表：同一 source_path 只展示一次，并合并图片。
-def _build_sources(retrieved: list[RetrievedChunk], max_images_per_source: int) -> list[SourceSnippet]:
+# 将检索结果整理成 API 来源列表：同一 source_path 只展示一次，并按单来源和总量限制合并图片。
+def _build_sources(
+    retrieved: list[RetrievedChunk],
+    max_images_per_source: int,
+    max_images_per_answer: int,
+) -> list[SourceSnippet]:
     sources_by_path: dict[str, SourceSnippet] = {}
+    total_images = 0
     for item in retrieved:
         source_path = item.chunk.source_path
         existing = sources_by_path.get(source_path)
         if existing is None:
+            remaining_images = max(max_images_per_answer - total_images, 0)
+            images = list(item.chunk.images[: min(max_images_per_source, remaining_images)])
+            total_images += len(images)
             sources_by_path[source_path] = SourceSnippet(
                 title=item.chunk.title,
                 source_path=source_path,
                 snippet=item.chunk.content[:300],
-                images=list(item.chunk.images[:max_images_per_source]),
+                images=images,
                 score=item.score,
             )
             continue
 
         for image in item.chunk.images:
+            if total_images >= max_images_per_answer:
+                break
             if len(existing.images) >= max_images_per_source:
                 break
             if image not in existing.images:
                 existing.images.append(image)
+                total_images += 1
         if item.score is not None and (existing.score is None or item.score > existing.score):
             existing.score = item.score
     return list(sources_by_path.values())
@@ -72,10 +83,17 @@ def _ensure_answer_citations(answer: str, evidence_count: int) -> str:
 # 串联检索器和大模型，把用户问题转换成带来源的问答响应。
 class RagChain:
     # 注入检索器和 LLM，便于测试时使用假对象，生产时使用真实服务。
-    def __init__(self, retriever: RetrieverProtocol, llm: LLMProtocol, max_images_per_source: int = 5) -> None:
+    def __init__(
+        self,
+        retriever: RetrieverProtocol,
+        llm: LLMProtocol,
+        max_images_per_source: int = 5,
+        max_images_per_answer: int = 8,
+    ) -> None:
         self.retriever = retriever
         self.llm = llm
         self.max_images_per_source = max_images_per_source
+        self.max_images_per_answer = max_images_per_answer
 
     # 执行完整 RAG 问答流程：检索资料、生成回答、整理来源和图片。
     def answer(self, question: str) -> ChatResponse:
@@ -92,4 +110,7 @@ class RagChain:
             return ChatResponse(answer=answer, sources=[])
 
         answer = _ensure_answer_citations(answer, len(retrieved))
-        return ChatResponse(answer=answer, sources=_build_sources(retrieved, self.max_images_per_source))
+        return ChatResponse(
+            answer=answer,
+            sources=_build_sources(retrieved, self.max_images_per_source, self.max_images_per_answer),
+        )

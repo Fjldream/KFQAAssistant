@@ -61,6 +61,32 @@ class FakeManyImagesRetriever:
         ]
 
 
+class FakeMultipleImageSourcesRetriever:
+    def retrieve(self, query: str):
+        return [
+            RetrievedChunk(
+                chunk=DocumentChunk(
+                    id="doc::0",
+                    title="来源一",
+                    source_path="来源一.md",
+                    content="第一份资料。",
+                    images=["来源一/1.png", "来源一/2.png", "来源一/3.png"],
+                ),
+                score=0.9,
+            ),
+            RetrievedChunk(
+                chunk=DocumentChunk(
+                    id="doc::1",
+                    title="来源二",
+                    source_path="来源二.md",
+                    content="第二份资料。",
+                    images=["来源二/1.png", "来源二/2.png", "来源二/3.png"],
+                ),
+                score=0.8,
+            ),
+        ]
+
+
 class FakeLLM:
     def generate(self, question: str, contexts: list[str]) -> str:
         assert "页面编辑器包括菜单栏" in contexts[0]
@@ -155,3 +181,18 @@ def test_rag_chain_limits_images_per_source():
     response = chain.answer("如何创建采集工程？")
 
     assert response.sources[0].images == ["教程/1.png", "教程/2.png", "教程/3.png", "教程/4.png", "教程/5.png"]
+
+
+def test_rag_chain_limits_total_images_per_answer_without_dropping_sources():
+    chain = RagChain(
+        retriever=FakeMultipleImageSourcesRetriever(),
+        llm=FakeContextCountingLLM(),
+        max_images_per_source=2,
+        max_images_per_answer=3,
+    )
+
+    response = chain.answer("如何查看资料图片？")
+
+    assert [source.source_path for source in response.sources] == ["来源一.md", "来源二.md"]
+    assert response.sources[0].images == ["来源一/1.png", "来源一/2.png"]
+    assert response.sources[1].images == ["来源二/1.png"]

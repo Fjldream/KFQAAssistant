@@ -24,4 +24,9 @@ def create_rag_chain() -> RagChain:
         model=settings.deepseek_model,
         timeout_seconds=settings.deepseek_timeout_seconds,
     )
-    return RagChain(retriever=retriever, llm=llm, max_images_per_source=settings.max_images_per_source)
+    return RagChain(
+        retriever=retriever,
+        llm=llm,
+        max_images_per_source=settings.max_images_per_source,
+        max_images_per_answer=settings.max_images_per_answer,
+    )
