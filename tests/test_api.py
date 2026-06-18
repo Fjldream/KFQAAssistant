@@ -15,6 +15,45 @@ def test_health_endpoint():
     assert response.json()["status"] == "ok"
 
 
+# 验证索引状态接口会返回向量库 chunk 数量和持久化目录。
+def test_index_status_endpoint_reports_vector_store_count(monkeypatch):
+    class FakeVectorStore:
+        # 模拟已构建索引的向量库数量。
+        def count(self):
+            return 12
+
+    import app.api.routes_index as routes_index
+
+    monkeypatch.setattr(routes_index, "create_vector_store", lambda: FakeVectorStore())
+    client = TestClient(create_app())
+
+    response = client.get("/api/index/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+    assert response.json()["chunks"] == 12
+    assert response.json()["persist_dir"] == "storage/chroma"
+
+
+# 验证索引为空时状态接口会返回 empty，方便部署后判断是否需要先构建索引。
+def test_index_status_endpoint_reports_empty_vector_store(monkeypatch):
+    class FakeVectorStore:
+        # 模拟尚未构建索引的空向量库数量。
+        def count(self):
+            return 0
+
+    import app.api.routes_index as routes_index
+
+    monkeypatch.setattr(routes_index, "create_vector_store", lambda: FakeVectorStore())
+    client = TestClient(create_app())
+
+    response = client.get("/api/index/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "empty"
+    assert response.json()["chunks"] == 0
+
+
 def test_chat_rejects_empty_question():
     client = TestClient(create_app())
 

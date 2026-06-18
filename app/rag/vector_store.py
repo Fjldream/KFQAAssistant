@@ -101,6 +101,10 @@ class ChromaVectorStore:
             self.store.add_documents(documents=documents, ids=ids)
         return len(ids)
 
+    # 返回当前 Chroma collection 中的文档数量，用于健康检查和索引状态展示。
+    def count(self) -> int:
+        return int(self.store._collection.count())
+
     # 根据用户问题检索相关 chunks，并把 Chroma 结果还原成业务层 RetrievedChunk。
     def similarity_search(self, query: str, top_k: int) -> list[RetrievedChunk]:
         vector_results = self.store.similarity_search_with_relevance_scores(query, k=max(top_k * 4, top_k))
