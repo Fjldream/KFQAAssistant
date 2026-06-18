@@ -32,6 +32,7 @@ def test_chat_uses_rag_chain(monkeypatch):
                         title="页面编辑器/简介",
                         source_path="页面编辑器/简介.md",
                         snippet="页面编辑器包括菜单栏、工具栏、工具箱和配置窗。",
+                        evidence_ids=["资料 1"],
                         images=["页面编辑器/1.png"],
                     )
                 ],
@@ -46,4 +47,5 @@ def test_chat_uses_rag_chain(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["answer"] == "页面编辑器包括菜单栏、工具栏、工具箱和配置窗。"
+    assert response.json()["sources"][0]["evidence_ids"] == ["资料 1"]
     assert response.json()["sources"][0]["images"] == ["页面编辑器/1.png"]

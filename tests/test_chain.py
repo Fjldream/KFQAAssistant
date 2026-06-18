@@ -129,6 +129,7 @@ def test_rag_chain_returns_answer_sources_and_images():
     assert "菜单栏" in response.answer
     assert "参考：[资料 1]" in response.answer
     assert response.sources[0].source_path == "页面编辑器/简介.md"
+    assert response.sources[0].evidence_ids == ["资料 1"]
     assert response.sources[0].images == ["页面编辑器/1.png"]
 
 
@@ -172,6 +173,7 @@ def test_rag_chain_deduplicates_sources_without_dropping_llm_contexts():
     ]
     assert len(response.sources) == 1
     assert response.sources[0].source_path == "数采管理/工程开发-Windows.md"
+    assert response.sources[0].evidence_ids == ["资料 1", "资料 2"]
     assert response.sources[0].images == ["数采管理/1.png", "数采管理/2.png"]
 
 

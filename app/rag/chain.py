@@ -28,7 +28,8 @@ def _build_sources(
 ) -> list[SourceSnippet]:
     sources_by_path: dict[str, SourceSnippet] = {}
     total_images = 0
-    for item in retrieved:
+    for index, item in enumerate(retrieved, start=1):
+        evidence_id = f"资料 {index}"
         source_path = item.chunk.source_path
         existing = sources_by_path.get(source_path)
         if existing is None:
@@ -39,11 +40,14 @@ def _build_sources(
                 title=item.chunk.title,
                 source_path=source_path,
                 snippet=item.chunk.content[:300],
+                evidence_ids=[evidence_id],
                 images=images,
                 score=item.score,
             )
             continue
 
+        if evidence_id not in existing.evidence_ids:
+            existing.evidence_ids.append(evidence_id)
         for image in item.chunk.images:
             if total_images >= max_images_per_answer:
                 break
