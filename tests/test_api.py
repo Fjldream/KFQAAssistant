@@ -1,4 +1,5 @@
 import logging
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -14,6 +15,73 @@ def test_health_endpoint():
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+# 验证就绪检查在核心配置和索引都可用时返回 ready，给部署平台判断服务可接流量。
+def test_readiness_endpoint_reports_ready(monkeypatch):
+    class FakeVectorStore:
+        # 模拟已经构建完成的向量库。
+        def count(self):
+            return 12
+
+    import app.api.routes_health as routes_health
+
+    monkeypatch.setattr(
+        routes_health,
+        "get_settings",
+        lambda: SimpleNamespace(
+            app_env="production",
+            disable_auth=False,
+            app_api_key="internal-key",
+            deepseek_api_key="deepseek-key",
+        ),
+    )
+    monkeypatch.setattr(routes_health, "create_vector_store", lambda: FakeVectorStore())
+    client = TestClient(create_app())
+
+    response = client.get("/api/health/ready")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+    assert response.json()["chunks"] == 12
+    assert response.json()["issues"] == []
+    assert response.json()["checks"]["index"] == "ok"
+
+
+# 验证就绪检查会暴露关键配置问题，避免部署后用户请求才发现服务不可用。
+def test_readiness_endpoint_reports_not_ready(monkeypatch):
+    class FakeVectorStore:
+        # 模拟尚未构建索引的空向量库。
+        def count(self):
+            return 0
+
+    import app.api.routes_health as routes_health
+
+    monkeypatch.setattr(
+        routes_health,
+        "get_settings",
+        lambda: SimpleNamespace(
+            app_env="production",
+            disable_auth=True,
+            app_api_key="",
+            deepseek_api_key="",
+        ),
+    )
+    monkeypatch.setattr(routes_health, "create_vector_store", lambda: FakeVectorStore())
+    client = TestClient(create_app())
+
+    response = client.get("/api/health/ready")
+
+    assert response.status_code == 503
+    assert response.json()["status"] == "not_ready"
+    assert response.json()["checks"]["deepseek_api_key"] == "error"
+    assert response.json()["checks"]["auth"] == "error"
+    assert response.json()["checks"]["index"] == "error"
+    assert response.json()["issues"] == [
+        "未配置 DEEPSEEK_API_KEY，问答接口无法调用大模型。",
+        "生产环境不能关闭 API Key 认证，请设置 DISABLE_AUTH=false 并配置 APP_API_KEY。",
+        "知识库索引为空，请先执行索引构建。",
+    ]
 
 
 # 验证索引状态接口会返回向量库 chunk 数量和持久化目录。
