@@ -54,6 +54,30 @@ def test_index_status_endpoint_reports_empty_vector_store(monkeypatch):
     assert response.json()["chunks"] == 0
 
 
+# 验证重建索引成功后会清理 RAG 工厂缓存，避免后续请求继续复用旧对象。
+def test_rebuild_index_clears_rag_factory_cache(monkeypatch):
+    cache_events = []
+
+    class FakeVectorStore:
+        # 模拟重建索引并返回写入的 chunk 数量。
+        def rebuild(self, chunks):
+            return len(chunks)
+
+    import app.api.routes_index as routes_index
+
+    monkeypatch.setattr(routes_index, "load_documents", lambda data_dir: ["doc"])
+    monkeypatch.setattr(routes_index, "split_documents", lambda documents: ["chunk"])
+    monkeypatch.setattr(routes_index, "create_vector_store", lambda: FakeVectorStore())
+    monkeypatch.setattr(routes_index, "clear_rag_factory_cache", lambda: cache_events.append("cleared"), raising=False)
+    client = TestClient(create_app())
+
+    response = client.post("/api/index/rebuild")
+
+    assert response.status_code == 200
+    assert response.json()["chunks"] == 1
+    assert cache_events == ["cleared"]
+
+
 def test_chat_rejects_empty_question():
     client = TestClient(create_app())
 
