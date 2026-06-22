@@ -1,9 +1,10 @@
 import logging
 from time import perf_counter
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.dependencies import verify_api_key
+from app.rag.errors import RagServiceError
 from app.rag.factory import create_rag_chain
 from app.schemas.chat import ChatRequest, ChatResponse
 
@@ -34,6 +35,15 @@ def chat(request: ChatRequest) -> ChatResponse:
     chain = create_rag_chain()
     try:
         response = chain.answer(request.question)
+    except RagServiceError as exc:
+        elapsed_ms = int((perf_counter() - started_at) * 1000)
+        logger.warning(
+            "chat_service_unavailable question_length=%s elapsed_ms=%s error=%s",
+            len(request.question),
+            elapsed_ms,
+            exc.__class__.__name__,
+        )
+        raise HTTPException(status_code=exc.status_code, detail=exc.public_message) from exc
     except Exception:
         elapsed_ms = int((perf_counter() - started_at) * 1000)
         logger.exception("chat_failed question_length=%s elapsed_ms=%s", len(request.question), elapsed_ms)

@@ -1,5 +1,7 @@
 import httpx
 
+from app.rag.errors import LLMGenerationError
+
 
 SYSTEM_PROMPT = """你是 KF 产品手册问答助手。
 你只能根据提供的手册片段回答。
@@ -34,8 +36,11 @@ class DeepSeekClient:
             "temperature": 0.2,
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
-        with httpx.Client(timeout=self.timeout_seconds, trust_env=False) as client:
-            response = client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-        return data["choices"][0]["message"]["content"].strip()
+        try:
+            with httpx.Client(timeout=self.timeout_seconds, trust_env=False) as client:
+                response = client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+            return data["choices"][0]["message"]["content"].strip()
+        except (httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
+            raise LLMGenerationError() from exc

@@ -1,9 +1,13 @@
 from app.rag.models import DocumentChunk
+from app.rag.errors import IndexNotReadyError
 from app.rag.retriever import RetrievedChunk, RetrieverService
 from app.rag.vector_store import combined_score, diversify_results, keyword_score
 
 
 class FakeVectorStore:
+    def count(self):
+        return 1
+
     def similarity_search(self, query: str, top_k: int):
         return [
             RetrievedChunk(
@@ -19,6 +23,14 @@ class FakeVectorStore:
         ]
 
 
+class FakeEmptyVectorStore:
+    def count(self):
+        return 0
+
+    def similarity_search(self, query: str, top_k: int):
+        raise AssertionError("空索引不应该继续执行相似度检索")
+
+
 def test_retriever_returns_ranked_chunks():
     service = RetrieverService(vector_store=FakeVectorStore(), top_k=5)
 
@@ -26,6 +38,18 @@ def test_retriever_returns_ranked_chunks():
 
     assert results[0].score == 0.91
     assert results[0].chunk.images == ["页面编辑器/1.png"]
+
+
+# 验证索引为空时检索层主动中断，避免后续返回误导性的“没有答案”。
+def test_retriever_raises_when_index_is_empty():
+    service = RetrieverService(vector_store=FakeEmptyVectorStore(), top_k=5)
+
+    try:
+        service.retrieve("页面编辑器有哪些区域？")
+    except IndexNotReadyError as exc:
+        assert exc.public_message == "知识库索引还没有构建，请先执行索引构建。"
+    else:
+        raise AssertionError("空索引时应该抛出 IndexNotReadyError")
 
 
 def test_keyword_score_boosts_system_environment_document():

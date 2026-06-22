@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.schemas.chat import ChatResponse, SourceSnippet
 from app.main import create_app
+from app.rag.errors import IndexNotReadyError
 
 
 def test_health_endpoint():
@@ -114,6 +115,24 @@ def test_chat_uses_rag_chain(monkeypatch):
     assert response.json()["answer"] == "页面编辑器包括菜单栏、工具栏、工具箱和配置窗。"
     assert response.json()["sources"][0]["evidence_ids"] == ["资料 1"]
     assert response.json()["sources"][0]["images"] == ["页面编辑器/1.png"]
+
+
+# 验证 RAG 可预期异常会返回友好的 503，而不是把 Python 内部错误暴露给前端。
+def test_chat_returns_service_unavailable_for_rag_error(monkeypatch):
+    class FakeChain:
+        # 模拟向量库为空时 Chain 抛出的业务异常。
+        def answer(self, question: str):
+            raise IndexNotReadyError()
+
+    import app.api.routes_chat as routes_chat
+
+    monkeypatch.setattr(routes_chat, "create_rag_chain", lambda: FakeChain())
+    client = TestClient(create_app())
+
+    response = client.post("/api/chat", json={"question": "如何创建采集工程？"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "知识库索引还没有构建，请先执行索引构建。"
 
 
 # 验证问答接口会记录耗时、来源数和图片数等可观测指标。

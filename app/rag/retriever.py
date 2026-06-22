@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.rag.errors import IndexNotReadyError
 from app.rag.models import DocumentChunk
 
 
@@ -13,6 +14,10 @@ class RetrievedChunk:
 
 # 定义向量库需要提供的最小检索接口，便于以后替换 Chroma、Milvus 或 Qdrant。
 class VectorStoreProtocol(Protocol):
+    # 返回当前向量库中的 chunk 数量，用于判断索引是否已经构建。
+    def count(self) -> int:
+        ...
+
     # 根据用户问题检索最相关的 top_k 个知识片段。
     def similarity_search(self, query: str, top_k: int) -> list[RetrievedChunk]:
         ...
@@ -27,4 +32,6 @@ class RetrieverService:
 
     # 根据用户问题调用向量库检索，返回带来源信息的相关 chunks。
     def retrieve(self, query: str) -> list[RetrievedChunk]:
+        if self.vector_store.count() <= 0:
+            raise IndexNotReadyError()
         return self.vector_store.similarity_search(query, self.top_k)
