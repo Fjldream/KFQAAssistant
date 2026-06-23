@@ -1,18 +1,37 @@
 # KF RAG 问答助手
 
-这是一个面向 KF 产品手册的 RAG 问答服务。第一版使用 FastAPI 提供接口，本地 embedding 模型构建向量库，DeepSeek API 生成最终回答。
+KF RAG 问答助手是一个面向 KF 产品使用手册的问答系统。它会从 `data/help` 加载手册文档，构建本地 Chroma 向量库，再通过 DeepSeek 生成带资料来源和相关图片的回答。
 
-## 第一版能力
+当前版本优先保证本地轻量可运行，同时保留企业级产品需要的接口、配置、健康检查、评估和压测入口。
 
-- 从 `data/help` 加载产品手册。
-- 优先使用 Markdown，必要时清洗 HTML。
-- 构建本地 Chroma 向量库。
-- 通过 `POST /api/chat` 返回答案、引用片段和相关图片。
-- 提供本地 demo 页面用于验证效果。
+## 已支持能力
+
+- 加载 Markdown 和 HTML 手册文档。
+- 保留文档中的图片位置，并在回答来源中返回相关图片路径。
+- 使用 `BAAI/bge-small-zh-v1.5` 在本地生成 embedding。
+- 使用 Chroma 持久化向量库，默认目录为 `storage/chroma`。
+- 使用 DeepSeek 生成最终回答。
+- 支持向量检索和关键词召回混合排序。
+- 支持资料来源去重、证据编号、图片数量限制和拒答保护。
+- 提供 FastAPI 问答接口和 Streamlit Demo 页面。
+- 提供索引状态、就绪检查、评估脚本和轻量压测脚本。
+
+## 目录说明
+
+```text
+app/                 FastAPI 服务和 RAG 核心代码
+demo/                Streamlit Demo 页面
+scripts/             索引构建、命令行问答、评估、压测脚本
+tests/               自动化测试和轻量评估问题
+data/help/           KF 产品手册原始文档，本地放置，不提交仓库
+storage/chroma/      Chroma 向量库持久化目录，本地生成，不提交仓库
+.env.example         可提交的环境变量样例
+.env                 本地真实配置，不提交仓库
+```
 
 ## 环境准备
 
-建议使用项目专用 conda 环境，避免污染 base 环境：
+建议使用独立 conda 环境，避免污染 base 环境。
 
 ```bash
 conda create -n kf-rag python=3.11 -y
@@ -21,34 +40,94 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-编辑 `.env`，填入 `DEEPSEEK_API_KEY`。
-
-默认 DeepSeek 模型是 `deepseek-v4-flash`。这是 DeepSeek 官方当前支持的模型之一，适合第一版产品问答的速度和成本需求。
-
-常用配置：
+编辑 `.env`，至少填写：
 
 ```text
-TOP_K=5
-MAX_IMAGES_PER_SOURCE=5
+DEEPSEEK_API_KEY=你的 DeepSeek API Key
 ```
 
-`TOP_K` 控制每次检索返回多少个相关片段；`MAX_IMAGES_PER_SOURCE` 控制每个来源最多返回多少张图片，避免前端一次展示过多截图。
+第一次构建索引时会加载 embedding 模型。如果本机没有缓存，需要能访问 HuggingFace 或提前准备好模型缓存。
 
-## 构建索引
+## 关键配置
+
+`.env.example` 已列出项目用到的配置。常用配置如下：
+
+```text
+APP_ENV=local
+DISABLE_AUTH=true
+APP_API_KEY=
+
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_TIMEOUT_SECONDS=60
+
+EMBEDDING_MODEL_NAME=BAAI/bge-small-zh-v1.5
+DATA_DIR=data/help
+CHROMA_PERSIST_DIR=storage/chroma
+
+TOP_K=5
+MAX_IMAGES_PER_SOURCE=5
+MAX_IMAGES_PER_ANSWER=8
+KF_RAG_API_URL=http://127.0.0.1:8000/api/chat
+```
+
+`TOP_K` 表示每次问答检索多少个相关 chunk。值越大，可用资料越多，但大模型上下文更长、速度可能更慢。
+
+`MAX_IMAGES_PER_SOURCE` 控制每个来源最多返回多少张图片；`MAX_IMAGES_PER_ANSWER` 控制一次回答最多返回多少张图片。
+
+## 准备手册数据
+
+把 KF 产品手册放到：
+
+```text
+data/help/
+```
+
+`data/` 已在 `.gitignore` 中忽略，手册文件不会被提交到远程仓库。
+
+## 构建向量索引
 
 ```bash
 python -m scripts.build_index
 ```
 
-第一次运行会下载 `BAAI/bge-small-zh-v1.5`，需要网络。索引会写入 `storage/chroma`。
+构建流程是：
+
+```text
+加载 data/help 文档
+  -> 清洗 Markdown 或 HTML
+  -> 保留图片位置标记
+  -> 切分为 DocumentChunk
+  -> 生成 embedding
+  -> 写入 storage/chroma
+```
+
+服务启动不会自动重新 embedding。只要 `storage/chroma` 还在，后续启动会复用已有向量库。只有手动运行 `scripts.build_index` 或调用重建接口时，才会重新构建索引。
 
 ## 启动 API 服务
+
+开发环境推荐：
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-健康检查：
+也可以显式指定地址和端口：
+
+```bash
+uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --reload
+```
+
+接口地址：
+
+```text
+http://127.0.0.1:8000
+```
+
+## 健康检查和就绪检查
+
+存活检查只判断服务进程是否正常：
 
 ```bash
 curl http://127.0.0.1:8000/api/health
@@ -60,15 +139,49 @@ curl http://127.0.0.1:8000/api/health
 {"status":"ok"}
 ```
 
-问答接口：
+就绪检查判断系统是否具备真实问答条件：
+
+```bash
+curl http://127.0.0.1:8000/api/health/ready
+```
+
+它会检查：
+
+- `DEEPSEEK_API_KEY` 是否配置。
+- 生产环境是否关闭了免认证。
+- 向量库索引是否已经构建。
+
+如果未就绪，会返回 `503` 和 `issues` 列表，按提示处理即可。
+
+## 查看索引状态
+
+```bash
+curl http://127.0.0.1:8000/api/index/status
+```
+
+返回示例：
+
+```json
+{
+  "status": "ready",
+  "chunks": 1234,
+  "persist_dir": "storage/chroma"
+}
+```
+
+如果 `chunks` 为 `0`，说明需要先构建索引。
+
+## 调用问答接口
+
+本地默认 `DISABLE_AUTH=true`，可以直接调用：
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/api/chat" \
   -H "Content-Type: application/json" \
-  -d '{"question":"如何创建采集工程"}'
+  -d '{"question":"如何创建采集工程？"}'
 ```
 
-返回结构包含回答、来源片段和图片路径：
+返回结构：
 
 ```json
 {
@@ -78,6 +191,7 @@ curl -X POST "http://127.0.0.1:8000/api/chat" \
       "title": "来源标题",
       "source_path": "html/...",
       "snippet": "命中的手册片段",
+      "evidence_ids": ["资料 1"],
       "images": ["html/.../1.png"],
       "score": 0.5
     }
@@ -85,7 +199,7 @@ curl -X POST "http://127.0.0.1:8000/api/chat" \
 }
 ```
 
-如果手册片段中没有可靠答案，接口会返回固定拒答文案，并且 `sources` 为空：
+如果手册中没有可靠依据，系统会返回固定拒答：
 
 ```json
 {
@@ -94,22 +208,9 @@ curl -X POST "http://127.0.0.1:8000/api/chat" \
 }
 ```
 
-本地默认 `DISABLE_AUTH=true`，接口不需要鉴权。部署到公司服务器时建议改为：
+## 使用 Postman 测试
 
-```text
-DISABLE_AUTH=false
-APP_API_KEY=自定义内部访问密钥
-```
-
-此时调用接口需要增加请求头：
-
-```bash
--H "x-api-key: 自定义内部访问密钥"
-```
-
-## 使用 Postman 测试接口
-
-在 Postman 中创建一个请求：
+请求方式：
 
 ```text
 POST http://127.0.0.1:8000/api/chat
@@ -121,27 +222,21 @@ Headers：
 Content-Type: application/json
 ```
 
-Body 选择 `raw` 和 `JSON`，填写：
+Body 选择 `raw` 和 `JSON`：
 
 ```json
 {
-  "question": "如何创建采集工程"
+  "question": "如何创建采集工程？"
 }
 ```
 
-如果启用了 `APP_API_KEY`，还需要在 Headers 中增加：
+如果开启了接口认证，还需要增加：
 
 ```text
-x-api-key: 自定义内部访问密钥
+x-api-key: 你的 APP_API_KEY
 ```
 
-## 命令行提问
-
-```bash
-python -m scripts.ask 页面编辑器主要包括哪些区域？
-```
-
-## 启动 demo 页面
+## 启动 Demo 页面
 
 先启动 API 服务，再运行：
 
@@ -149,29 +244,32 @@ python -m scripts.ask 页面编辑器主要包括哪些区域？
 streamlit run demo/streamlit_app.py
 ```
 
-浏览器打开 Streamlit 地址后，输入 KF 产品使用问题即可测试问答效果。
+默认 Demo 会调用：
 
-## 测试
-
-```bash
-pytest tests -v
+```text
+http://127.0.0.1:8000/api/chat
 ```
 
-如果不想激活环境，也可以使用：
+如果 API 地址不同，可以在 `.env` 中修改：
+
+```text
+KF_RAG_API_URL=http://你的服务地址/api/chat
+```
+
+## 命令行问答
 
 ```bash
-conda run -n kf-rag pytest tests -v
+python -m scripts.ask "页面编辑器主要包括哪些区域？"
 ```
+
+这个脚本适合不打开 Demo 时快速验证问答效果。
 
 ## RAG 效果评估
 
-评估集位于 `tests/eval_questions.json`。每个问题包含：
+评估集位于：
 
-```json
-{
-  "question": "页面编辑器主要包括哪些区域？",
-  "expected_keywords": ["菜单栏", "工具栏"]
-}
+```text
+tests/eval_questions.json
 ```
 
 运行评估：
@@ -180,49 +278,78 @@ conda run -n kf-rag pytest tests -v
 python -m scripts.evaluate
 ```
 
-脚本会逐题调用 RAG，并检查回答、来源、图片和拒答行为是否符合预期。这个评估不是最终标准答案评分，而是第一阶段用来发现“检索跑偏”“回答缺关键点”“该拒答时没有拒答”的轻量检查。
+评估脚本会检查回答关键词、来源关键词、拒答行为和图片返回数量。它不是最终人工验收标准，但能快速发现检索跑偏、回答缺关键点、该拒答时没有拒答等问题。
 
 ## 检索调试
 
-如果某个问题回答不理想，可以先检查检索层命中了哪些 chunk：
+如果某个问题回答不好，先看检索层找到了哪些 chunk：
 
 ```bash
 python -m scripts.inspect_retrieval "如何创建采集工程？" --top-k 5
 ```
 
-输出中会包含排名、向量分、关键词分、来源路径、图片和片段预览。这个脚本不会调用大模型，适合快速定位“资料有没有先找对”。
+这个脚本不会调用大模型，适合定位问题是在“资料没找对”，还是“资料找对了但回答生成不好”。
 
-## RAG 处理流程
+## 轻量压测
 
-当前文档处理链路：
+启动 API 后运行：
 
-```text
-data/help 原始手册
-  -> 选择 Markdown 或 HTML
-  -> 在图片位置插入内部标记
-  -> 清洗正文并保留图片位置
-  -> 统一成 ManualDocument
-  -> 切成 DocumentChunk，并只给相关 chunk 绑定附近图片
-  -> 写入 Chroma 向量库
-  -> 检索相关片段
-  -> DeepSeek 生成回答
+```bash
+python -m scripts.load_test -n 10 -c 2
 ```
 
-图片不会直接进入向量文本，而是作为 metadata 返回。系统会先在 Markdown 图片或 HTML `img` 标签位置插入内部标记，切块时根据标记把图片绑定到对应 chunk，最后再从 chunk 正文中移除内部标记。
+参数含义：
 
-## 重要安全说明
+- `-n`：总请求数。
+- `-c`：并发数。
+- `--question`：压测使用的问题。
+- `--api-url`：问答接口地址，默认读取 `KF_RAG_API_URL`。
+
+它会输出成功数、失败数、成功率、平均耗时、P95 耗时等指标。
+
+## 生产环境建议配置
+
+部署到公司服务器时，建议至少调整：
+
+```text
+APP_ENV=production
+DISABLE_AUTH=false
+APP_API_KEY=自定义内部访问密钥
+DEEPSEEK_API_KEY=生产可用的 DeepSeek Key
+CHROMA_PERSIST_DIR=/data/kf-rag/chroma
+DATA_DIR=/data/kf-rag/help
+```
+
+生产调用接口时需要带请求头：
+
+```text
+x-api-key: 自定义内部访问密钥
+```
+
+建议把 `data/help` 和 `storage/chroma` 挂载到服务器持久化目录，避免服务升级或容器重建后丢失手册和索引。
+
+## 安全说明
 
 - 不要提交 `.env`。
-- 不要在日志中打印真实 API Key。
-- 如果部署到公司服务器，建议关闭 `DISABLE_AUTH` 并配置 `APP_API_KEY`。
-- 当前 embedding 在本地执行，DeepSeek API 会收到用户问题和检索出来的手册片段。
+- 不要把真实 API Key 写进 README、测试或日志。
+- `data/` 和 `storage/chroma/` 默认不提交仓库。
+- 生产环境不要使用 `DISABLE_AUTH=true`。
+- DeepSeek API 会收到用户问题和检索出来的手册片段。
 
-## 后续学习路线
+## 常见问题
 
-1. 文档清洗
-2. 文档切块
-3. Embedding 和向量库
-4. 检索
-5. Prompt 和 LLM 生成
-6. API 服务化
-7. RAG 评估
+### 每次启动都会重新 embedding 吗？
+
+不会。服务启动时只会读取已有的 Chroma 向量库。只有重新运行 `python -m scripts.build_index` 或调用索引重建接口，才会重新 embedding 并写入向量库。
+
+### 为什么有些回答没有图片？
+
+图片是绑定在命中的 chunk 上的。如果检索命中的 chunk 附近没有图片，回答就不会返回图片。系统不会为了展示图片而返回无关截图。
+
+### `top_k=5` 是什么意思？
+
+表示每次从知识库中选出 5 个最相关的 chunk 交给大模型。它影响资料覆盖范围、回答质量、速度和 token 消耗。
+
+### 就绪检查返回 `not_ready` 怎么办？
+
+查看 `issues` 字段。常见原因是没有填 `DEEPSEEK_API_KEY`、没有构建索引，或生产环境还开着 `DISABLE_AUTH=true`。

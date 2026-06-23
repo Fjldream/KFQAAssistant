@@ -1,9 +1,11 @@
 import html
 import os
+from pathlib import Path
 from typing import Any
 
 import requests
 import streamlit as st
+from dotenv import load_dotenv
 
 try:
     from demo.ui_helpers import (
@@ -18,6 +20,7 @@ except ModuleNotFoundError:
     from ui_helpers import snippet_preview
 
 
+load_dotenv(dotenv_path=Path.cwd() / ".env")
 DEFAULT_API_URL = os.getenv("KF_RAG_API_URL", "http://127.0.0.1:8000/api/chat")
 
 st.set_page_config(page_title="KF RAG 问答助手", layout="wide")

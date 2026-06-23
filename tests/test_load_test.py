@@ -1,3 +1,6 @@
+import importlib
+from pathlib import Path
+
 from scripts.load_test import LoadTestResult, format_report, percentile, summarize_results
 
 
@@ -43,3 +46,16 @@ def test_format_report_outputs_chinese_summary():
     assert "请求数: 2" in report
     assert "成功率: 50%" in report
     assert "P95耗时: 200ms" in report
+
+
+# 验证压测脚本会读取 .env 中的接口地址，和 .env.example 的使用方式保持一致。
+def test_load_test_default_api_url_reads_dotenv(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("KF_RAG_API_URL", raising=False)
+    Path(".env").write_text("KF_RAG_API_URL=http://example.test/api/chat\n", encoding="utf-8")
+
+    import scripts.load_test as load_test
+
+    reloaded = importlib.reload(load_test)
+
+    assert reloaded.DEFAULT_API_URL == "http://example.test/api/chat"

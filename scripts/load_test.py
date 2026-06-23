@@ -3,11 +3,14 @@ import asyncio
 import math
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from time import perf_counter
 
 import httpx
+from dotenv import load_dotenv
 
 
+load_dotenv(dotenv_path=Path.cwd() / ".env")
 DEFAULT_API_URL = os.getenv("KF_RAG_API_URL", "http://127.0.0.1:8000/api/chat")
 DEFAULT_QUESTION = "页面编辑器主要包括哪些区域？"
 
