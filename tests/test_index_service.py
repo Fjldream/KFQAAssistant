@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+import app.rag.index_service as index_service
 from app.rag.index_service import update_index
 from app.rag.models import DocumentChunk
 
@@ -20,10 +23,14 @@ class FakeVectorStore:
         self.rebuild_calls: list[list[DocumentChunk]] = []
         self.add_calls: list[list[DocumentChunk]] = []
         self.delete_calls: list[list[str]] = []
+        self.fail_rebuild = False
 
     # 模拟清空 collection 后写入全部 chunks。
     def rebuild(self, chunks: list[DocumentChunk]) -> int:
         self.rebuild_calls.append(chunks)
+        if self.fail_rebuild:
+            self.chunks.clear()
+            raise RuntimeError("模拟全量写入失败")
         self.chunks = {chunk.id: chunk for chunk in chunks}
         return len(chunks)
 
@@ -132,6 +139,7 @@ def test_deleted_document_removes_its_chunks(tmp_path: Path):
     data_dir, manifest_path = make_paths(tmp_path)
     path = data_dir / "guide.md"
     path.write_text("# 指南", encoding="utf-8")
+    (data_dir / "keep.md").write_text("# 保留文档", encoding="utf-8")
     store = FakeVectorStore()
     update_index(data_dir, manifest_path, store)
     store.reset_events()
@@ -140,7 +148,7 @@ def test_deleted_document_removes_its_chunks(tmp_path: Path):
     result = update_index(data_dir, manifest_path, store)
 
     assert result.deleted_documents == 1
-    assert result.total_chunks == 0
+    assert result.total_chunks == 1
     assert store.delete_calls == [["guide.md"]]
     assert store.add_calls == []
 
@@ -186,3 +194,83 @@ def test_full_rebuild_recovers_corrupted_manifest(tmp_path: Path):
     assert result.mode == "full"
     assert len(store.rebuild_calls) == 1
     assert '"version": 1' in manifest_path.read_text(encoding="utf-8")
+
+
+# 验证全量写入失败后会留下恢复标记，使下次默认构建自动再次全量处理。
+def test_failed_full_rebuild_forces_next_run_to_recover(tmp_path: Path):
+    data_dir, manifest_path = make_paths(tmp_path)
+    (data_dir / "guide.md").write_text("# 指南", encoding="utf-8")
+    store = FakeVectorStore()
+    update_index(data_dir, manifest_path, store)
+    store.fail_rebuild = True
+
+    with pytest.raises(RuntimeError, match="模拟全量写入失败"):
+        update_index(data_dir, manifest_path, store, full=True)
+
+    assert store.count() == 0
+    store.fail_rebuild = False
+    store.reset_events()
+
+    result = update_index(data_dir, manifest_path, store)
+
+    assert result.mode == "full"
+    assert len(store.rebuild_calls) == 1
+    assert store.count() == 1
+
+
+# 验证新增来源在清单保存失败后重试，会先删除可能残留的旧 chunks。
+def test_retrying_failed_addition_cleans_source_residue(tmp_path: Path, monkeypatch):
+    data_dir, manifest_path = make_paths(tmp_path)
+    (data_dir / "existing.md").write_text("# 已有文档", encoding="utf-8")
+    store = FakeVectorStore()
+    update_index(data_dir, manifest_path, store)
+    added_path = data_dir / "added.md"
+    added_path.write_text("# 新文档\n" + "A" * 900, encoding="utf-8")
+    real_save_manifest = index_service.save_manifest
+
+    # 模拟向量写入完成后，manifest 原子保存发生磁盘异常。
+    def fail_manifest_save(path, manifest):
+        raise OSError("模拟清单保存失败")
+
+    monkeypatch.setattr(index_service, "save_manifest", fail_manifest_save)
+    with pytest.raises(OSError, match="模拟清单保存失败"):
+        update_index(data_dir, manifest_path, store)
+    assert "added.md::1" in store.chunks
+
+    added_path.write_text("# 新文档\n短内容", encoding="utf-8")
+    monkeypatch.setattr(index_service, "save_manifest", real_save_manifest)
+    store.reset_events()
+
+    update_index(data_dir, manifest_path, store)
+
+    assert store.delete_calls == [["added.md"]]
+    assert "added.md::1" not in store.chunks
+
+
+# 验证手册根目录不存在时直接终止，不删除已有向量或改写 manifest。
+def test_missing_document_root_does_not_touch_existing_index(tmp_path: Path):
+    missing_root = tmp_path / "missing-help"
+    manifest_path = tmp_path / "processed" / "index_manifest.json"
+    store = FakeVectorStore(initial_count=2)
+
+    with pytest.raises(index_service.IndexSourceError, match="手册目录不存在"):
+        update_index(missing_root, manifest_path, store)
+
+    assert store.count() == 2
+    assert store.rebuild_calls == []
+    assert store.add_calls == []
+    assert store.delete_calls == []
+    assert not manifest_path.exists()
+
+
+# 验证手册目录为空时拒绝清空已有索引，防止空目录挂载事故。
+def test_empty_document_root_does_not_clear_existing_index(tmp_path: Path):
+    data_dir, manifest_path = make_paths(tmp_path)
+    store = FakeVectorStore(initial_count=2)
+
+    with pytest.raises(index_service.IndexSourceError, match="没有可索引"):
+        update_index(data_dir, manifest_path, store, full=True)
+
+    assert store.count() == 2
+    assert store.rebuild_calls == []
+    assert not manifest_path.exists()

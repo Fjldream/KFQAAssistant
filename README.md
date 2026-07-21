@@ -113,6 +113,8 @@ python -m scripts.build_index
 python -m scripts.build_index --full
 ```
 
+全量重建开始前会写入恢复标记。若 embedding 或 Chroma 写入中途失败，下一次默认构建会自动再次执行全量恢复，不会被旧 manifest 误判为“文档没有变化”。如果 `data/help` 不存在或没有可索引文档，构建会直接终止，不修改已有向量库，避免服务器挂载错误清空知识库。
+
 ## 启动 API 服务
 
 开发环境推荐：
@@ -258,6 +260,8 @@ curl -X POST "http://127.0.0.1:8000/api/index/rebuild?full=true"
 ```
 
 接口会返回 `added_documents`、`modified_documents`、`deleted_documents`、`skipped_documents`、`written_chunks` 和 `total_chunks`。
+
+同一服务进程一次只允许一个索引任务。已有任务运行时，重复请求会返回 `409`；当前 Docker 配置使用单 Uvicorn 进程，多 worker 或多副本部署需要额外配置跨进程索引锁。
 
 ## 调用问答接口
 

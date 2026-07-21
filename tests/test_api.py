@@ -205,6 +205,45 @@ def test_rebuild_index_accepts_full_mode(monkeypatch):
     assert received == [True]
 
 
+# 验证同一进程已有索引任务运行时，第二个请求会立即返回 409。
+def test_rebuild_index_rejects_concurrent_request():
+    import app.api.routes_index as routes_index
+
+    routes_index.index_update_lock.acquire()
+    try:
+        response = TestClient(create_app()).post("/api/index/rebuild")
+    finally:
+        routes_index.index_update_lock.release()
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "已有索引构建任务正在运行，请稍后重试。"
+
+
+# 验证手册目录异常会返回明确 503，并在异常后释放索引锁。
+def test_rebuild_index_returns_service_unavailable_for_source_error(monkeypatch):
+    import app.api.routes_index as routes_index
+    from app.rag.index_service import IndexSourceError
+
+    monkeypatch.setattr(
+        routes_index,
+        "get_settings",
+        lambda: SimpleNamespace(data_dir="missing", index_manifest_path="manifest.json"),
+    )
+    monkeypatch.setattr(routes_index, "create_vector_store", lambda: "vector-store")
+
+    # 模拟部署时手册挂载目录缺失。
+    def fail_update(**kwargs):
+        raise IndexSourceError("手册目录不存在或不是目录: /missing")
+
+    monkeypatch.setattr(routes_index, "update_index", fail_update)
+    response = TestClient(create_app()).post("/api/index/rebuild")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "手册目录不存在或不是目录: /missing"
+    assert routes_index.index_update_lock.acquire(blocking=False) is True
+    routes_index.index_update_lock.release()
+
+
 def test_chat_rejects_empty_question():
     client = TestClient(create_app())
 
