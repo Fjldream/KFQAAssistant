@@ -10,7 +10,7 @@ services:
       - "8000:8000"
     volumes:
       - ./data/help:/app/data/help:ro
-      - ./storage/chroma:/app/storage/chroma
+      - ./storage:/app/storage
     restart: unless-stopped
     healthcheck:
       test:

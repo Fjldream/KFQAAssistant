@@ -25,6 +25,7 @@ scripts/             索引构建、命令行问答、评估、压测脚本
 tests/               自动化测试和轻量评估问题
 data/help/           KF 产品手册原始文档，本地放置，不提交仓库
 storage/chroma/      Chroma 向量库持久化目录，本地生成，不提交仓库
+storage/processed/   文档哈希和 chunk ID 清单，本地生成，不提交仓库
 .env.example         可提交的环境变量样例
 .env                 本地真实配置，不提交仓库
 ```
@@ -65,6 +66,7 @@ DEEPSEEK_TIMEOUT_SECONDS=60
 EMBEDDING_MODEL_NAME=BAAI/bge-small-zh-v1.5
 DATA_DIR=data/help
 CHROMA_PERSIST_DIR=storage/chroma
+INDEX_MANIFEST_PATH=storage/processed/index_manifest.json
 
 TOP_K=5
 MAX_IMAGES_PER_SOURCE=5
@@ -95,15 +97,21 @@ python -m scripts.build_index
 构建流程是：
 
 ```text
-加载 data/help 文档
-  -> 清洗 Markdown 或 HTML
-  -> 保留图片位置标记
-  -> 切分为 DocumentChunk
-  -> 生成 embedding
-  -> 写入 storage/chroma
+扫描 data/help 并计算 SHA-256
+  -> 对比 storage/processed/index_manifest.json
+  -> 只加载新增或修改的文档
+  -> 清洗、保留图片位置并切分
+  -> 只为变化 chunks 生成 embedding
+  -> 同步更新 Chroma 和索引清单
 ```
 
-服务启动不会自动重新 embedding。只要 `storage/chroma` 还在，后续启动会复用已有向量库。只有手动运行 `scripts.build_index` 或调用重建接口时，才会重新构建索引。
+服务启动不会自动重新 embedding。`python -m scripts.build_index` 默认执行增量更新：内容没有变化的文档会直接跳过，不调用 embedding；新增、修改和删除的文档会同步到 Chroma。
+
+从不带 manifest 的旧版本第一次升级运行时，系统会自动执行一次全量重建来建立基线。以后再次运行就是增量更新。修改了 embedding 模型或分块规则时，使用下面的命令强制全量重建：
+
+```bash
+python -m scripts.build_index --full
+```
 
 ## 启动 API 服务
 
@@ -131,7 +139,7 @@ http://127.0.0.1:8000
 
 ```bash
 cp .env.example .env
-mkdir -p data/help storage/chroma
+mkdir -p data/help storage/chroma storage/processed
 ```
 
 把 KF 手册放入：
@@ -149,6 +157,7 @@ APP_API_KEY=自定义内部访问密钥
 DEEPSEEK_API_KEY=生产可用的 DeepSeek Key
 DATA_DIR=data/help
 CHROMA_PERSIST_DIR=storage/chroma
+INDEX_MANIFEST_PATH=storage/processed/index_manifest.json
 ```
 
 构建镜像：
@@ -184,11 +193,11 @@ docker compose down
 `docker-compose.yml` 默认挂载：
 
 ```text
-./data/help      -> /app/data/help:ro
-./storage/chroma -> /app/storage/chroma
+./data/help -> /app/data/help:ro
+./storage   -> /app/storage
 ```
 
-手册目录用只读挂载，向量库目录用可写挂载。这样升级镜像时，手册和索引数据仍然留在服务器磁盘上。
+手册目录用只读挂载，整个 `storage` 目录用可写挂载，让 Chroma 和增量索引清单一起持久化。这样升级镜像时，手册和索引数据仍然留在服务器磁盘上。
 
 ## 健康检查和就绪检查
 
@@ -235,6 +244,20 @@ curl http://127.0.0.1:8000/api/index/status
 ```
 
 如果 `chunks` 为 `0`，说明需要先构建索引。
+
+手册更新后，可以通过接口执行默认增量更新：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/index/rebuild"
+```
+
+修改 embedding 模型或分块规则后，可以强制全量重建：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/index/rebuild?full=true"
+```
+
+接口会返回 `added_documents`、`modified_documents`、`deleted_documents`、`skipped_documents`、`written_chunks` 和 `total_chunks`。
 
 ## 调用问答接口
 
@@ -382,6 +405,7 @@ DISABLE_AUTH=false
 APP_API_KEY=自定义内部访问密钥
 DEEPSEEK_API_KEY=生产可用的 DeepSeek Key
 CHROMA_PERSIST_DIR=/data/kf-rag/chroma
+INDEX_MANIFEST_PATH=/data/kf-rag/processed/index_manifest.json
 DATA_DIR=/data/kf-rag/help
 ```
 
@@ -391,13 +415,13 @@ DATA_DIR=/data/kf-rag/help
 x-api-key: 自定义内部访问密钥
 ```
 
-建议把 `data/help` 和 `storage/chroma` 挂载到服务器持久化目录，避免服务升级或容器重建后丢失手册和索引。
+建议把 `data/help` 和整个 `storage` 挂载到服务器持久化目录，避免服务升级或容器重建后丢失手册、向量库和增量索引清单。
 
 ## 安全说明
 
 - 不要提交 `.env`。
 - 不要把真实 API Key 写进 README、测试或日志。
-- `data/` 和 `storage/chroma/` 默认不提交仓库。
+- `data/` 和 `storage/` 默认不提交仓库。
 - 生产环境不要使用 `DISABLE_AUTH=true`。
 - DeepSeek API 会收到用户问题和检索出来的手册片段。
 
@@ -405,7 +429,7 @@ x-api-key: 自定义内部访问密钥
 
 ### 每次启动都会重新 embedding 吗？
 
-不会。服务启动时只会读取已有的 Chroma 向量库。只有重新运行 `python -m scripts.build_index` 或调用索引重建接口，才会重新 embedding 并写入向量库。
+不会。服务启动时只会读取已有的 Chroma 向量库。重新运行 `python -m scripts.build_index` 或调用索引接口时，也只会 embedding 新增或修改的文档；未变化文档直接复用已有向量。只有传入 `--full` 或 `full=true` 才会全量重新 embedding。
 
 ### 为什么有些回答没有图片？
 

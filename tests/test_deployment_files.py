@@ -29,7 +29,7 @@ def test_docker_compose_mounts_runtime_data_and_healthcheck():
     assert service["build"]["context"] == "."
     assert "8000:8000" in service["ports"]
     assert "./data/help:/app/data/help:ro" in service["volumes"]
-    assert "./storage/chroma:/app/storage/chroma" in service["volumes"]
+    assert "./storage:/app/storage" in service["volumes"]
     assert service["env_file"] == [".env"]
     assert "/api/health" in " ".join(service["healthcheck"]["test"])
 

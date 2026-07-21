@@ -1,23 +1,38 @@
+import argparse
+
 from app.core.config import get_settings
-from app.rag.document_loader import load_documents
 from app.rag.factory import create_vector_store
-from app.rag.splitter import split_documents
+from app.rag.index_service import update_index
 
 
-# 命令行索引构建入口：从原始手册生成 chunks 并写入 Chroma。
-def main() -> None:
+# 解析索引构建参数，默认增量更新，传入 --full 时强制全量重建。
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="构建 KF 手册向量索引")
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="忽略已有增量清单，清空并重新构建全部向量",
+    )
+    return parser.parse_args(argv)
+
+
+# 命令行索引构建入口：比较文档变化并更新本地 Chroma。
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
     settings = get_settings()
-    documents = load_documents(settings.data_dir)
-    chunks = split_documents(documents)
-    vector_store = create_vector_store()
-    count = vector_store.rebuild(chunks)
-    chunks_with_images = sum(1 for chunk in chunks if chunk.images)
-    print(f"已构建索引 chunks: {count}")
-    print(f"其中带图片 metadata 的 chunks: {chunks_with_images}")
-    first_chunk_with_images = next((chunk for chunk in chunks if chunk.images), None)
-    if first_chunk_with_images:
-        print(f"图片样例来源: {first_chunk_with_images.source_path}")
-        print(f"图片样例: {first_chunk_with_images.images[:3]}")
+    result = update_index(
+        root_dir=settings.data_dir,
+        manifest_path=settings.index_manifest_path,
+        vector_store=create_vector_store(),
+        full=args.full,
+    )
+    print(f"运行模式: {result.mode}")
+    print(f"新增文档: {result.added_documents}")
+    print(f"修改文档: {result.modified_documents}")
+    print(f"删除文档: {result.deleted_documents}")
+    print(f"跳过文档: {result.skipped_documents}")
+    print(f"写入 chunks: {result.written_chunks}")
+    print(f"索引总 chunks: {result.total_chunks}")
 
 
 if __name__ == "__main__":

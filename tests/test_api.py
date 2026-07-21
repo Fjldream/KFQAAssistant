@@ -123,28 +123,86 @@ def test_index_status_endpoint_reports_empty_vector_store(monkeypatch):
     assert response.json()["chunks"] == 0
 
 
-# 验证重建索引成功后会清理 RAG 工厂缓存，避免后续请求继续复用旧对象。
-def test_rebuild_index_clears_rag_factory_cache(monkeypatch):
+# 验证索引接口默认执行增量更新，并在成功后清理 RAG 工厂缓存。
+def test_rebuild_index_defaults_to_incremental(monkeypatch):
     cache_events = []
+    received = []
 
-    class FakeVectorStore:
-        # 模拟重建索引并返回写入的 chunk 数量。
-        def rebuild(self, chunks):
-            return len(chunks)
+    class FakeResult:
+        # 返回索引接口需要的统一增量统计。
+        def to_dict(self):
+            return {
+                "mode": "incremental",
+                "added_documents": 1,
+                "modified_documents": 0,
+                "deleted_documents": 0,
+                "skipped_documents": 2,
+                "written_chunks": 3,
+                "total_chunks": 10,
+            }
 
     import app.api.routes_index as routes_index
 
-    monkeypatch.setattr(routes_index, "load_documents", lambda data_dir: ["doc"])
-    monkeypatch.setattr(routes_index, "split_documents", lambda documents: ["chunk"])
-    monkeypatch.setattr(routes_index, "create_vector_store", lambda: FakeVectorStore())
+    monkeypatch.setattr(
+        routes_index,
+        "get_settings",
+        lambda: SimpleNamespace(
+            data_dir="data/help",
+            index_manifest_path="storage/processed/index_manifest.json",
+        ),
+    )
+    monkeypatch.setattr(routes_index, "create_vector_store", lambda: "vector-store")
+
+    # 记录 API 传给统一索引服务的参数。
+    def fake_update_index(**kwargs):
+        received.append(kwargs)
+        return FakeResult()
+
+    monkeypatch.setattr(routes_index, "update_index", fake_update_index, raising=False)
     monkeypatch.setattr(routes_index, "clear_rag_factory_cache", lambda: cache_events.append("cleared"), raising=False)
     client = TestClient(create_app())
 
     response = client.post("/api/index/rebuild")
 
     assert response.status_code == 200
-    assert response.json()["chunks"] == 1
+    assert response.json()["mode"] == "incremental"
+    assert response.json()["written_chunks"] == 3
+    assert received[0]["full"] is False
     assert cache_events == ["cleared"]
+
+
+# 验证 full=true 会传给统一索引服务。
+def test_rebuild_index_accepts_full_mode(monkeypatch):
+    received = []
+
+    class FakeResult:
+        # 返回全量重建使用的最小测试结果。
+        def to_dict(self):
+            return {"mode": "full"}
+
+    import app.api.routes_index as routes_index
+
+    monkeypatch.setattr(
+        routes_index,
+        "get_settings",
+        lambda: SimpleNamespace(data_dir="data/help", index_manifest_path="manifest.json"),
+    )
+    monkeypatch.setattr(routes_index, "create_vector_store", lambda: "vector-store")
+
+    # 记录接口收到的 full 模式并返回测试结果。
+    def fake_update_index(**kwargs):
+        received.append(kwargs["full"])
+        return FakeResult()
+
+    monkeypatch.setattr(routes_index, "update_index", fake_update_index, raising=False)
+    monkeypatch.setattr(routes_index, "clear_rag_factory_cache", lambda: None)
+    client = TestClient(create_app())
+
+    response = client.post("/api/index/rebuild?full=true")
+
+    assert response.status_code == 200
+    assert response.json()["mode"] == "full"
+    assert received == [True]
 
 
 def test_chat_rejects_empty_question():
