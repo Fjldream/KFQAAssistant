@@ -9,6 +9,7 @@ KF RAG 问答助手是一个面向 KF 产品使用手册的问答系统。它会
 - 加载 Markdown 和 HTML 手册文档。
 - 保留文档中的图片位置，并在回答来源中返回相关图片路径。
 - 使用 `BAAI/bge-small-zh-v1.5` 在本地生成 embedding。
+- embedding 模型按需懒加载，无变化索引检查不会加载重量级模型。
 - 使用 Chroma 持久化向量库，默认目录为 `storage/chroma`。
 - 使用 DeepSeek 生成最终回答。
 - 支持向量检索和关键词召回混合排序。
@@ -433,7 +434,7 @@ x-api-key: 自定义内部访问密钥
 
 ### 每次启动都会重新 embedding 吗？
 
-不会。服务启动时只会读取已有的 Chroma 向量库。重新运行 `python -m scripts.build_index` 或调用索引接口时，也只会 embedding 新增或修改的文档；未变化文档直接复用已有向量。只有传入 `--full` 或 `full=true` 才会全量重新 embedding。
+不会。服务启动时只会读取已有的 Chroma 向量库。重新运行 `python -m scripts.build_index` 或调用索引接口时，也只会 embedding 新增或修改的文档；未变化文档直接复用已有向量，而且不会加载本地 embedding 模型。只有真正写入变化 chunks、执行向量检索，或传入 `--full`、`full=true` 时才会按需加载模型。
 
 ### 为什么有些回答没有图片？
 

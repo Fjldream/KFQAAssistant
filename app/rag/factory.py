@@ -2,7 +2,7 @@ from functools import lru_cache
 
 from app.core.config import get_settings
 from app.rag.chain import RagChain
-from app.rag.embeddings import create_embeddings
+from app.rag.embeddings import LazyEmbeddings
 from app.rag.llm import DeepSeekClient
 from app.rag.retriever import RetrieverService
 from app.rag.vector_store import ChromaVectorStore
@@ -12,7 +12,7 @@ from app.rag.vector_store import ChromaVectorStore
 @lru_cache(maxsize=1)
 def create_vector_store() -> ChromaVectorStore:
     settings = get_settings()
-    embeddings = create_embeddings(settings.embedding_model_name)
+    embeddings = LazyEmbeddings(settings.embedding_model_name)
     return ChromaVectorStore(settings.chroma_persist_dir, embeddings)
 
 
