@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     embedding_model_name: str = "BAAI/bge-small-zh-v1.5"
     chroma_persist_dir: Path = Path("storage/chroma")
+    index_manifest_path: Path = Path("storage/processed/index_manifest.json")
     data_dir: Path = Path("data/help")
     top_k: int = 5
     max_images_per_source: int = 5

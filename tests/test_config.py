@@ -8,6 +8,7 @@ def test_settings_defaults_are_local_friendly():
     assert settings.disable_auth is True
     assert settings.deepseek_model == "deepseek-v4-flash"
     assert settings.embedding_model_name == "BAAI/bge-small-zh-v1.5"
+    assert str(settings.index_manifest_path) == "storage/processed/index_manifest.json"
     assert settings.top_k == 5
     assert settings.max_images_per_source == 5
     assert settings.max_images_per_answer == 8
