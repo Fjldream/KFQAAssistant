@@ -24,6 +24,9 @@ def prepare_cli(monkeypatch, mode: str) -> list[dict[str, object]]:
     settings = SimpleNamespace(
         data_dir=Path("data/help"),
         index_manifest_path=Path("storage/processed/index_manifest.json"),
+        embedding_model_name="test-embedding-model",
+        chunk_size=700,
+        chunk_overlap=100,
     )
     vector_store = object()
     monkeypatch.setattr(build_index, "get_settings", lambda: settings)
@@ -46,6 +49,9 @@ def test_build_index_defaults_to_incremental(monkeypatch, capsys):
 
     assert received[0]["full"] is False
     assert received[0]["root_dir"] == Path("data/help")
+    assert received[0]["embedding_model_name"] == "test-embedding-model"
+    assert received[0]["chunk_size"] == 700
+    assert received[0]["chunk_overlap"] == 100
     output = capsys.readouterr().out
     assert "运行模式: incremental" in output
     assert "跳过文档: 4" in output

@@ -1,10 +1,16 @@
 from dataclasses import asdict, dataclass
+import hashlib
+import json
 from pathlib import Path
 
 from app.rag.document_loader import discover_document_paths, load_document
 from app.rag.index_manifest import IndexManifest, ManifestEntry, hash_file, load_manifest, save_manifest
 from app.rag.models import DocumentChunk, ManualDocument
-from app.rag.splitter import split_documents
+from app.rag.splitter import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE, split_documents
+
+
+INDEX_PIPELINE_VERSION = 1
+DEFAULT_EMBEDDING_MODEL_NAME = "BAAI/bge-small-zh-v1.5"
 
 
 # 表示手册根目录缺失或类型错误，索引服务不会在此异常下修改向量库。
@@ -47,11 +53,41 @@ def _chunk_ids_by_source(source_paths: list[str], chunks: list[DocumentChunk]) -
     return result
 
 
+# 根据会影响向量内容的配置生成稳定指纹，用于判断旧索引是否兼容。
+def build_index_signature(
+    embedding_model_name: str,
+    chunk_size: int,
+    chunk_overlap: int,
+    pipeline_version: int = INDEX_PIPELINE_VERSION,
+) -> str:
+    payload = json.dumps(
+        {
+            "pipeline_version": pipeline_version,
+            "embedding_model_name": embedding_model_name,
+            "chunk_size": chunk_size,
+            "chunk_overlap": chunk_overlap,
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+# 校验分块参数，避免 overlap 大于等于 chunk_size 时切块循环无法前进。
+def _validate_chunk_settings(chunk_size: int, chunk_overlap: int) -> None:
+    if chunk_size <= 0:
+        raise ValueError("chunk_size 必须大于 0")
+    if chunk_overlap < 0 or chunk_overlap >= chunk_size:
+        raise ValueError("chunk_overlap 必须大于等于 0 且小于 chunk_size")
+
+
 # 根据当前文件哈希和 chunk IDs 生成可持久化的完整索引清单。
 def _create_manifest(
     source_paths: list[str],
     content_hashes: dict[str, str],
     chunk_ids: dict[str, list[str]],
+    index_signature: str,
 ) -> IndexManifest:
     return IndexManifest(
         documents={
@@ -60,7 +96,8 @@ def _create_manifest(
                 chunk_ids=chunk_ids[source_path],
             )
             for source_path in sorted(source_paths)
-        }
+        },
+        index_signature=index_signature,
     )
 
 
@@ -88,14 +125,20 @@ def _rebuild_full(
     paths_by_source: dict[str, Path],
     content_hashes: dict[str, str],
     vector_store,
+    index_signature: str,
+    chunk_size: int,
+    chunk_overlap: int,
 ) -> IndexUpdateResult:
     source_paths = sorted(paths_by_source)
     documents = _load_selected_documents([paths_by_source[source] for source in source_paths], root_dir)
-    chunks = split_documents(documents)
+    chunks = split_documents(documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     _mark_rebuild_pending(manifest_path)
     written_chunks = vector_store.rebuild(chunks)
     chunk_ids = _chunk_ids_by_source(source_paths, chunks)
-    save_manifest(manifest_path, _create_manifest(source_paths, content_hashes, chunk_ids))
+    save_manifest(
+        manifest_path,
+        _create_manifest(source_paths, content_hashes, chunk_ids, index_signature),
+    )
     _clear_rebuild_pending(manifest_path)
     return IndexUpdateResult(
         mode="full",
@@ -114,7 +157,12 @@ def update_index(
     manifest_path: Path,
     vector_store,
     full: bool = False,
+    embedding_model_name: str = DEFAULT_EMBEDDING_MODEL_NAME,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+    pipeline_version: int = INDEX_PIPELINE_VERSION,
 ) -> IndexUpdateResult:
+    _validate_chunk_settings(chunk_size, chunk_overlap)
     root_dir = Path(root_dir).resolve()
     manifest_path = Path(manifest_path)
     if not root_dir.is_dir():
@@ -124,13 +172,48 @@ def update_index(
         raise IndexSourceError(f"手册目录中没有可索引的 Markdown 或 HTML 文档: {root_dir}")
     paths_by_source = _paths_by_source(root_dir, paths)
     content_hashes = {source: hash_file(path) for source, path in paths_by_source.items()}
+    index_signature = build_index_signature(
+        embedding_model_name=embedding_model_name,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        pipeline_version=pipeline_version,
+    )
 
     if full or _rebuild_marker_path(manifest_path).exists():
-        return _rebuild_full(root_dir, manifest_path, paths_by_source, content_hashes, vector_store)
+        return _rebuild_full(
+            root_dir,
+            manifest_path,
+            paths_by_source,
+            content_hashes,
+            vector_store,
+            index_signature,
+            chunk_size,
+            chunk_overlap,
+        )
 
     previous = load_manifest(manifest_path)
     if previous is None and vector_store.count() > 0:
-        return _rebuild_full(root_dir, manifest_path, paths_by_source, content_hashes, vector_store)
+        return _rebuild_full(
+            root_dir,
+            manifest_path,
+            paths_by_source,
+            content_hashes,
+            vector_store,
+            index_signature,
+            chunk_size,
+            chunk_overlap,
+        )
+    if previous is not None and previous.index_signature != index_signature:
+        return _rebuild_full(
+            root_dir,
+            manifest_path,
+            paths_by_source,
+            content_hashes,
+            vector_store,
+            index_signature,
+            chunk_size,
+            chunk_overlap,
+        )
 
     previous = previous or IndexManifest(documents={})
     old_sources = set(previous.documents)
@@ -149,7 +232,7 @@ def update_index(
         [paths_by_source[source] for source in changed_sources],
         root_dir,
     )
-    chunks = split_documents(documents)
+    chunks = split_documents(documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     removed_sources = changed_sources + deleted
     if removed_sources:
         vector_store.delete_sources(removed_sources)
@@ -158,9 +241,12 @@ def update_index(
     chunk_ids = _chunk_ids_by_source(changed_sources, chunks)
     next_documents = {source: previous.documents[source] for source in skipped}
     next_documents.update(
-        _create_manifest(changed_sources, content_hashes, chunk_ids).documents
+        _create_manifest(changed_sources, content_hashes, chunk_ids, index_signature).documents
     )
-    save_manifest(manifest_path, IndexManifest(documents=next_documents))
+    save_manifest(
+        manifest_path,
+        IndexManifest(documents=next_documents, index_signature=index_signature),
+    )
     return IndexUpdateResult(
         mode="incremental",
         added_documents=len(added),

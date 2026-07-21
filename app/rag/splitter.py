@@ -3,6 +3,10 @@ from app.rag.models import DocumentChunk, ManualDocument
 from app.rag.text_cleaner import normalize_blank_lines
 
 
+DEFAULT_CHUNK_SIZE = 700
+DEFAULT_CHUNK_OVERLAP = 100
+
+
 # 按固定长度切分文本，并保留少量重叠，避免关键语义被切断。
 def _split_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
     if len(text) <= chunk_size:
@@ -46,8 +50,8 @@ def _remove_image_markers(content: str) -> str:
 # 将清洗后的手册文档拆成可写入向量库的 DocumentChunk 列表。
 def split_documents(
     documents: list[ManualDocument],
-    chunk_size: int = 700,
-    chunk_overlap: int = 100,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
 ) -> list[DocumentChunk]:
     chunks: list[DocumentChunk] = []
     for document in documents:

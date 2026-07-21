@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     chroma_persist_dir: Path = Path("storage/chroma")
     index_manifest_path: Path = Path("storage/processed/index_manifest.json")
     data_dir: Path = Path("data/help")
+    chunk_size: int = 700
+    chunk_overlap: int = 100
     top_k: int = 5
     max_images_per_source: int = 5
     max_images_per_answer: int = 8

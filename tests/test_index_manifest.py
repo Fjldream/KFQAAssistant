@@ -34,13 +34,28 @@ def test_load_manifest_returns_none_when_file_is_missing(tmp_path: Path):
 def test_manifest_round_trip(tmp_path: Path):
     path = tmp_path / "processed" / "index_manifest.json"
     expected = IndexManifest(
-        documents={"guide.md": ManifestEntry(content_hash="abc", chunk_ids=["guide.md::0"])}
+        documents={"guide.md": ManifestEntry(content_hash="abc", chunk_ids=["guide.md::0"])},
+        index_signature="signature-v1",
     )
 
     save_manifest(path, expected)
 
     assert load_manifest(path) == expected
     assert not path.with_name(f"{path.name}.tmp").exists()
+
+
+# 验证旧版 manifest 没有配置指纹时仍可读取，并交给索引服务自动升级。
+def test_load_manifest_supports_legacy_file_without_index_signature(tmp_path: Path):
+    path = tmp_path / "index_manifest.json"
+    path.write_text(
+        '{"version": 1, "documents": {"guide.md": {"content_hash": "abc", "chunk_ids": ["guide.md::0"]}}}',
+        encoding="utf-8",
+    )
+
+    manifest = load_manifest(path)
+
+    assert manifest is not None
+    assert manifest.index_signature == ""
 
 
 # 验证损坏清单会给出明确业务错误，避免错误判断文档是否已索引。

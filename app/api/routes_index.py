@@ -35,6 +35,9 @@ def rebuild_index(full: bool = False):
             manifest_path=settings.index_manifest_path,
             vector_store=create_vector_store(),
             full=full,
+            embedding_model_name=settings.embedding_model_name,
+            chunk_size=settings.chunk_size,
+            chunk_overlap=settings.chunk_overlap,
         )
         clear_rag_factory_cache()
         return result.to_dict()

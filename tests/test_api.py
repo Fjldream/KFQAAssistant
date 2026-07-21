@@ -149,6 +149,9 @@ def test_rebuild_index_defaults_to_incremental(monkeypatch):
         lambda: SimpleNamespace(
             data_dir="data/help",
             index_manifest_path="storage/processed/index_manifest.json",
+            embedding_model_name="test-embedding-model",
+            chunk_size=700,
+            chunk_overlap=100,
         ),
     )
     monkeypatch.setattr(routes_index, "create_vector_store", lambda: "vector-store")
@@ -168,6 +171,9 @@ def test_rebuild_index_defaults_to_incremental(monkeypatch):
     assert response.json()["mode"] == "incremental"
     assert response.json()["written_chunks"] == 3
     assert received[0]["full"] is False
+    assert received[0]["embedding_model_name"] == "test-embedding-model"
+    assert received[0]["chunk_size"] == 700
+    assert received[0]["chunk_overlap"] == 100
     assert cache_events == ["cleared"]
 
 
@@ -185,7 +191,13 @@ def test_rebuild_index_accepts_full_mode(monkeypatch):
     monkeypatch.setattr(
         routes_index,
         "get_settings",
-        lambda: SimpleNamespace(data_dir="data/help", index_manifest_path="manifest.json"),
+        lambda: SimpleNamespace(
+            data_dir="data/help",
+            index_manifest_path="manifest.json",
+            embedding_model_name="test-embedding-model",
+            chunk_size=700,
+            chunk_overlap=100,
+        ),
     )
     monkeypatch.setattr(routes_index, "create_vector_store", lambda: "vector-store")
 
@@ -227,7 +239,13 @@ def test_rebuild_index_returns_service_unavailable_for_source_error(monkeypatch)
     monkeypatch.setattr(
         routes_index,
         "get_settings",
-        lambda: SimpleNamespace(data_dir="missing", index_manifest_path="manifest.json"),
+        lambda: SimpleNamespace(
+            data_dir="missing",
+            index_manifest_path="manifest.json",
+            embedding_model_name="test-embedding-model",
+            chunk_size=700,
+            chunk_overlap=100,
+        ),
     )
     monkeypatch.setattr(routes_index, "create_vector_store", lambda: "vector-store")
 

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -96,6 +97,78 @@ def test_unchanged_documents_skip_vector_writes(tmp_path: Path):
 
     assert result.skipped_documents == 1
     assert result.written_chunks == 0
+    assert store.add_calls == []
+    assert store.delete_calls == []
+
+
+# 验证 embedding 模型或分块参数变化时自动执行全量重建。
+@pytest.mark.parametrize(
+    "changed_options",
+    [
+        {"embedding_model_name": "new-embedding-model"},
+        {"chunk_size": 350},
+        {"chunk_overlap": 50},
+        {"pipeline_version": 2},
+    ],
+)
+def test_index_configuration_change_forces_full_rebuild(tmp_path: Path, changed_options: dict):
+    data_dir, manifest_path = make_paths(tmp_path)
+    (data_dir / "guide.md").write_text("# 指南", encoding="utf-8")
+    store = FakeVectorStore()
+    update_index(data_dir, manifest_path, store)
+    store.reset_events()
+
+    result = update_index(data_dir, manifest_path, store, **changed_options)
+
+    assert result.mode == "full"
+    assert len(store.rebuild_calls) == 1
+    assert store.add_calls == []
+
+
+# 验证旧 manifest 缺少配置指纹时自动执行一次全量升级。
+def test_legacy_manifest_without_signature_forces_full_upgrade(tmp_path: Path):
+    data_dir, manifest_path = make_paths(tmp_path)
+    (data_dir / "guide.md").write_text("# 指南", encoding="utf-8")
+    store = FakeVectorStore()
+    update_index(data_dir, manifest_path, store)
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload.pop("index_signature")
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+    store.reset_events()
+
+    result = update_index(data_dir, manifest_path, store)
+
+    assert result.mode == "full"
+    assert len(store.rebuild_calls) == 1
+    upgraded = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert upgraded["index_signature"]
+
+
+# 验证非法分块参数会在任何向量操作前被拒绝。
+@pytest.mark.parametrize(
+    ("chunk_size", "chunk_overlap"),
+    [(0, 0), (700, -1), (700, 700), (700, 800)],
+)
+def test_invalid_chunk_settings_do_not_touch_index(
+    tmp_path: Path,
+    chunk_size: int,
+    chunk_overlap: int,
+):
+    data_dir, manifest_path = make_paths(tmp_path)
+    (data_dir / "guide.md").write_text("# 指南", encoding="utf-8")
+    store = FakeVectorStore(initial_count=1)
+
+    with pytest.raises(ValueError, match="chunk_"):
+        update_index(
+            data_dir,
+            manifest_path,
+            store,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+
+    assert store.count() == 1
+    assert store.rebuild_calls == []
     assert store.add_calls == []
     assert store.delete_calls == []
 

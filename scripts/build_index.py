@@ -25,6 +25,9 @@ def main(argv: list[str] | None = None) -> None:
         manifest_path=settings.index_manifest_path,
         vector_store=create_vector_store(),
         full=args.full,
+        embedding_model_name=settings.embedding_model_name,
+        chunk_size=settings.chunk_size,
+        chunk_overlap=settings.chunk_overlap,
     )
     print(f"运行模式: {result.mode}")
     print(f"新增文档: {result.added_documents}")

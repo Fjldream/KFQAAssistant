@@ -18,6 +18,7 @@ class ManifestEntry:
 @dataclass(frozen=True)
 class IndexManifest:
     documents: dict[str, ManifestEntry]
+    index_signature: str = ""
     version: int = MANIFEST_VERSION
 
 
@@ -44,6 +45,9 @@ def _parse_manifest(data: object) -> IndexManifest:
     raw_documents = data.get("documents")
     if not isinstance(raw_documents, dict):
         raise TypeError("manifest documents must be an object")
+    index_signature = data.get("index_signature", "")
+    if not isinstance(index_signature, str):
+        raise TypeError("manifest index signature must be a string")
 
     documents: dict[str, ManifestEntry] = {}
     for source_path, raw_entry in raw_documents.items():
@@ -56,7 +60,7 @@ def _parse_manifest(data: object) -> IndexManifest:
         if not all(isinstance(chunk_id, str) for chunk_id in chunk_ids):
             raise TypeError("manifest chunk ids must be strings")
         documents[source_path] = ManifestEntry(content_hash=content_hash, chunk_ids=chunk_ids)
-    return IndexManifest(documents=documents)
+    return IndexManifest(documents=documents, index_signature=index_signature)
 
 
 # 读取索引清单；文件不存在表示还没有执行过受清单管理的构建。
@@ -76,6 +80,7 @@ def save_manifest(path: Path, manifest: IndexManifest) -> None:
     temporary_path = path.with_name(f"{path.name}.tmp")
     payload = {
         "version": manifest.version,
+        "index_signature": manifest.index_signature,
         "documents": {
             source_path: {
                 "content_hash": entry.content_hash,

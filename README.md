@@ -68,6 +68,8 @@ EMBEDDING_MODEL_NAME=BAAI/bge-small-zh-v1.5
 DATA_DIR=data/help
 CHROMA_PERSIST_DIR=storage/chroma
 INDEX_MANIFEST_PATH=storage/processed/index_manifest.json
+CHUNK_SIZE=700
+CHUNK_OVERLAP=100
 
 TOP_K=5
 MAX_IMAGES_PER_SOURCE=5
@@ -78,6 +80,8 @@ KF_RAG_API_URL=http://127.0.0.1:8000/api/chat
 `TOP_K` 表示每次问答检索多少个相关 chunk。值越大，可用资料越多，但大模型上下文更长、速度可能更慢。
 
 `MAX_IMAGES_PER_SOURCE` 控制每个来源最多返回多少张图片；`MAX_IMAGES_PER_ANSWER` 控制一次回答最多返回多少张图片。
+
+`CHUNK_SIZE` 是每个知识片段的目标字符数，`CHUNK_OVERLAP` 是相邻片段的重叠字符数。必须满足 `0 <= CHUNK_OVERLAP < CHUNK_SIZE`。
 
 ## 准备手册数据
 
@@ -115,6 +119,8 @@ python -m scripts.build_index --full
 ```
 
 全量重建开始前会写入恢复标记。若 embedding 或 Chroma 写入中途失败，下一次默认构建会自动再次执行全量恢复，不会被旧 manifest 误判为“文档没有变化”。如果 `data/help` 不存在或没有可索引文档，构建会直接终止，不修改已有向量库，避免服务器挂载错误清空知识库。
+
+manifest 同时保存索引配置指纹。embedding 模型、`CHUNK_SIZE`、`CHUNK_OVERLAP` 或内部文档处理版本变化时，系统会自动执行一次全量重建；配置不变时继续复用增量索引。旧版本 manifest 没有指纹时也会自动完成一次升级，无需手动删除向量库。
 
 ## 启动 API 服务
 
