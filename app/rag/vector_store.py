@@ -80,10 +80,8 @@ class ChromaVectorStore:
             embedding_function=embeddings,
         )
 
-    # 将切好的 chunks 写入 Chroma，返回写入数量，供索引构建脚本展示进度。
-    def rebuild(self, chunks: list[DocumentChunk]) -> int:
-        self.persist_dir.mkdir(parents=True, exist_ok=True)
-        self.store.reset_collection()
+    # 将业务 chunk 转换为 LangChain Document，统一全量和增量写入格式。
+    def _chunks_to_documents(self, chunks: list[DocumentChunk]) -> tuple[list[Document], list[str]]:
         ids = [chunk.id for chunk in chunks]
         documents = [
             Document(
@@ -97,9 +95,30 @@ class ChromaVectorStore:
             )
             for chunk in chunks
         ]
+        return documents, ids
+
+    # 只为新增或修改文档的 chunks 生成 embedding 并写入 Chroma。
+    def add_chunks(self, chunks: list[DocumentChunk]) -> int:
+        documents, ids = self._chunks_to_documents(chunks)
         if ids:
             self.store.add_documents(documents=documents, ids=ids)
         return len(ids)
+
+    # 按文档来源删除全部旧 chunks，返回实际删除数量。
+    def delete_sources(self, source_paths: list[str]) -> int:
+        ids: list[str] = []
+        for source_path in source_paths:
+            result = self.store.get(where={"source_path": source_path})
+            ids.extend(str(item) for item in result.get("ids", []))
+        if ids:
+            self.store.delete(ids=ids)
+        return len(ids)
+
+    # 将切好的 chunks 写入 Chroma，返回写入数量，供索引构建脚本展示进度。
+    def rebuild(self, chunks: list[DocumentChunk]) -> int:
+        self.persist_dir.mkdir(parents=True, exist_ok=True)
+        self.store.reset_collection()
+        return self.add_chunks(chunks)
 
     # 返回当前 Chroma collection 中的文档数量，用于健康检查和索引状态展示。
     def count(self) -> int:
