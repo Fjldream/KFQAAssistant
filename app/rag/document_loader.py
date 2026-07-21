@@ -16,11 +16,11 @@ def _has_markdown_twin(path: Path) -> bool:
     return path.with_suffix(".md").exists()
 
 
-# 遍历手册目录并加载文本资料，优先 Markdown，必要时回退到清洗后的 HTML。
-def load_documents(root_dir: Path) -> list[ManualDocument]:
+# 发现所有可索引手册路径；同名 Markdown 和 HTML 同时存在时只选择 Markdown。
+def discover_document_paths(root_dir: Path) -> list[Path]:
     root_dir = root_dir.resolve()
     paths = sorted(root_dir.rglob("*"))
-    selected = [
+    return [
         path
         for path in paths
         if path.is_file()
@@ -30,32 +30,34 @@ def load_documents(root_dir: Path) -> list[ManualDocument]:
         )
     ]
 
-    documents: list[ManualDocument] = []
-    for path in selected:
-        raw = path.read_text(encoding="utf-8", errors="ignore")
-        if path.suffix.lower() == ".md":
-            marked_raw, raw_image_markers = mark_markdown_images(raw)
-            image_markers = {
-                marker: resolve_image_path(raw_path, path, root_dir) for marker, raw_path in raw_image_markers.items()
-            }
-            images = list(image_markers.values())
-            content = clean_markdown(marked_raw)
-        else:
-            marked_raw, raw_image_markers = mark_html_images(raw)
-            image_markers = {
-                marker: resolve_image_path(raw_path, path, root_dir) for marker, raw_path in raw_image_markers.items()
-            }
-            images = list(image_markers.values())
-            content = clean_html(marked_raw)
 
-        if content.strip():
-            documents.append(
-                ManualDocument(
-                    title=_title_from_path(path, root_dir),
-                    source_path=path.relative_to(root_dir).as_posix(),
-                    content=content,
-                    images=images,
-                    image_markers=image_markers,
-                )
-            )
-    return documents
+# 加载并清洗一篇指定手册，供增量索引只处理发生变化的文件。
+def load_document(path: Path, root_dir: Path) -> ManualDocument | None:
+    root_dir = root_dir.resolve()
+    path = path.resolve()
+    raw = path.read_text(encoding="utf-8", errors="ignore")
+    if path.suffix.lower() == ".md":
+        marked_raw, raw_image_markers = mark_markdown_images(raw)
+        content = clean_markdown(marked_raw)
+    else:
+        marked_raw, raw_image_markers = mark_html_images(raw)
+        content = clean_html(marked_raw)
+
+    image_markers = {
+        marker: resolve_image_path(raw_path, path, root_dir) for marker, raw_path in raw_image_markers.items()
+    }
+    if not content.strip():
+        return None
+    return ManualDocument(
+        title=_title_from_path(path, root_dir),
+        source_path=path.relative_to(root_dir).as_posix(),
+        content=content,
+        images=list(image_markers.values()),
+        image_markers=image_markers,
+    )
+
+
+# 遍历手册目录并加载文本资料，优先 Markdown，必要时回退到清洗后的 HTML。
+def load_documents(root_dir: Path) -> list[ManualDocument]:
+    documents = [load_document(path, root_dir) for path in discover_document_paths(root_dir)]
+    return [document for document in documents if document is not None]

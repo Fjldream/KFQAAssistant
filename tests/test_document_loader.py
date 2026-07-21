@@ -1,6 +1,28 @@
 from pathlib import Path
 
-from app.rag.document_loader import load_documents
+from app.rag.document_loader import discover_document_paths, load_document, load_documents
+
+
+# 验证文档发现会排除已有 Markdown 双胞胎的 HTML 文件。
+def test_discover_document_paths_prefers_markdown(tmp_path: Path):
+    (tmp_path / "guide.md").write_text("# Markdown", encoding="utf-8")
+    (tmp_path / "guide.html").write_text("<h1>HTML</h1>", encoding="utf-8")
+
+    paths = discover_document_paths(tmp_path)
+
+    assert paths == [(tmp_path / "guide.md").resolve()]
+
+
+# 验证可以只加载增量更新指定的单篇文档。
+def test_load_document_loads_one_selected_file(tmp_path: Path):
+    path = tmp_path / "guide.md"
+    path.write_text("# 创建工程\n点击新建工程。", encoding="utf-8")
+
+    document = load_document(path, tmp_path)
+
+    assert document is not None
+    assert document.source_path == "guide.md"
+    assert "点击新建工程" in document.content
 
 
 def test_loader_prefers_markdown_over_html(tmp_path: Path):
