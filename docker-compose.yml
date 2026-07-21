@@ -1,0 +1,24 @@
+services:
+  kf-rag-api:
+    build:
+      context: .
+    image: kf-rag-assistant:latest
+    container_name: kf-rag-api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/help:/app/data/help:ro
+      - ./storage/chroma:/app/storage/chroma
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).read()"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

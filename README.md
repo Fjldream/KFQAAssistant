@@ -125,6 +125,71 @@ uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --reload
 http://127.0.0.1:8000
 ```
 
+## 使用 Docker Compose 部署
+
+服务器上建议使用 Docker Compose 固定运行环境。先准备配置和目录：
+
+```bash
+cp .env.example .env
+mkdir -p data/help storage/chroma
+```
+
+把 KF 手册放入：
+
+```text
+data/help/
+```
+
+生产环境建议在 `.env` 中至少设置：
+
+```text
+APP_ENV=production
+DISABLE_AUTH=false
+APP_API_KEY=自定义内部访问密钥
+DEEPSEEK_API_KEY=生产可用的 DeepSeek Key
+DATA_DIR=data/help
+CHROMA_PERSIST_DIR=storage/chroma
+```
+
+构建镜像：
+
+```bash
+docker compose build
+```
+
+第一次部署或手册更新后，先构建向量索引：
+
+```bash
+docker compose run --rm kf-rag-api python -m scripts.build_index
+```
+
+启动服务：
+
+```bash
+docker compose up -d
+```
+
+查看日志：
+
+```bash
+docker compose logs -f kf-rag-api
+```
+
+停止服务：
+
+```bash
+docker compose down
+```
+
+`docker-compose.yml` 默认挂载：
+
+```text
+./data/help      -> /app/data/help:ro
+./storage/chroma -> /app/storage/chroma
+```
+
+手册目录用只读挂载，向量库目录用可写挂载。这样升级镜像时，手册和索引数据仍然留在服务器磁盘上。
+
 ## 健康检查和就绪检查
 
 存活检查只判断服务进程是否正常：
