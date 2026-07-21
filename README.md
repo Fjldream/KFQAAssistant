@@ -110,7 +110,7 @@ python -m scripts.build_index
   -> 同步更新 Chroma 和索引清单
 ```
 
-服务启动不会自动重新 embedding。`python -m scripts.build_index` 默认执行增量更新：内容没有变化的文档会直接跳过，不调用 embedding；新增、修改和删除的文档会同步到 Chroma。
+服务启动不会自动重新 embedding。`python -m scripts.build_index` 默认执行增量更新：内容没有变化的文档会直接跳过，不调用 embedding，也不会重写 manifest；新增、修改和删除的文档会同步到 Chroma。
 
 从不带 manifest 的旧版本第一次升级运行时，系统会自动执行一次全量重建来建立基线。以后再次运行就是增量更新。修改了 embedding 模型或分块规则时，使用下面的命令强制全量重建：
 
@@ -247,12 +247,28 @@ curl http://127.0.0.1:8000/api/index/status
 ```json
 {
   "status": "ready",
-  "chunks": 1234,
-  "persist_dir": "storage/chroma"
+  "chunks": 6291,
+  "documents": 2275,
+  "last_built_at": "2026-07-21T02:00:00+00:00",
+  "index_signature": "当前索引配置指纹",
+  "current_signature": "当前运行配置指纹",
+  "config_matches": true,
+  "rebuild_pending": false,
+  "persist_dir": "storage/chroma",
+  "manifest_path": "storage/processed/index_manifest.json",
+  "issue": null
 }
 ```
 
-如果 `chunks` 为 `0`，说明需要先构建索引。
+`last_built_at` 来自 manifest 的最后修改时间。无变化的增量检查不会刷新它，因此它表示最近一次真实索引更新，而不是最近一次执行命令的时间。
+
+`status` 可能是：
+
+- `ready`：向量库非空，manifest 与当前 embedding、分块配置一致，可以正常问答。
+- `empty`：向量库为空，需要先构建索引。
+- `stale`：已有索引与当前配置不一致，需要重新构建。
+- `rebuild_required`：检测到上一次全量重建中断，需要再次构建以恢复完整索引。
+- `error`：manifest 损坏，查看 `issue` 并执行全量重建。
 
 手册更新后，可以通过接口执行默认增量更新：
 

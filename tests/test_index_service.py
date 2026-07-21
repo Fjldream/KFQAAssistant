@@ -86,12 +86,18 @@ def test_first_build_adds_all_documents_incrementally(tmp_path: Path):
 
 
 # 验证第二次无变化构建完全跳过 embedding 写入。
-def test_unchanged_documents_skip_vector_writes(tmp_path: Path):
+def test_unchanged_documents_skip_vector_writes(tmp_path: Path, monkeypatch):
     data_dir, manifest_path = make_paths(tmp_path)
     (data_dir / "guide.md").write_text("# 指南", encoding="utf-8")
     store = FakeVectorStore()
     update_index(data_dir, manifest_path, store)
     store.reset_events()
+
+    # 无变化时不应重写 manifest，文件时间才能代表最后一次真实更新。
+    def fail_manifest_save(path, manifest):
+        raise AssertionError("无变化索引不应保存 manifest")
+
+    monkeypatch.setattr(index_service, "save_manifest", fail_manifest_save)
 
     result = update_index(data_dir, manifest_path, store)
 

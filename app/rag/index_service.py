@@ -106,6 +106,11 @@ def _rebuild_marker_path(manifest_path: Path) -> Path:
     return manifest_path.with_name(f"{manifest_path.name}.rebuild_pending")
 
 
+# 判断上一次全量重建是否中断，供索引构建和状态接口共同使用。
+def is_rebuild_pending(manifest_path: Path) -> bool:
+    return _rebuild_marker_path(Path(manifest_path)).exists()
+
+
 # 在破坏性全量操作前写入恢复标记，防止失败后被旧 manifest 误判为无需更新。
 def _mark_rebuild_pending(manifest_path: Path) -> None:
     marker_path = _rebuild_marker_path(manifest_path)
@@ -179,7 +184,7 @@ def update_index(
         pipeline_version=pipeline_version,
     )
 
-    if full or _rebuild_marker_path(manifest_path).exists():
+    if full or is_rebuild_pending(manifest_path):
         return _rebuild_full(
             root_dir,
             manifest_path,
@@ -227,6 +232,17 @@ def update_index(
     )
     skipped = sorted((current_sources & old_sources) - set(modified))
     changed_sources = added + modified
+
+    if not changed_sources and not deleted:
+        return IndexUpdateResult(
+            mode="incremental",
+            added_documents=0,
+            modified_documents=0,
+            deleted_documents=0,
+            skipped_documents=len(skipped),
+            written_chunks=0,
+            total_chunks=vector_store.count(),
+        )
 
     documents = _load_selected_documents(
         [paths_by_source[source] for source in changed_sources],

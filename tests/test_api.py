@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -84,7 +85,7 @@ def test_readiness_endpoint_reports_not_ready(monkeypatch):
     ]
 
 
-# 验证索引状态接口会返回向量库 chunk 数量和持久化目录。
+# 验证索引状态接口会返回文档、chunk、配置指纹和最后更新时间。
 def test_index_status_endpoint_reports_vector_store_count(monkeypatch):
     class FakeVectorStore:
         # 模拟已构建索引的向量库数量。
@@ -92,8 +93,39 @@ def test_index_status_endpoint_reports_vector_store_count(monkeypatch):
             return 12
 
     import app.api.routes_index as routes_index
+    from app.rag.index_manifest import IndexManifest, ManifestEntry
 
+    manifest_path = Path("storage/processed/test_manifest.json")
+    monkeypatch.setattr(
+        routes_index,
+        "get_settings",
+        lambda: SimpleNamespace(
+            chroma_persist_dir="storage/chroma",
+            index_manifest_path=manifest_path,
+            embedding_model_name="test-embedding-model",
+            chunk_size=700,
+            chunk_overlap=100,
+        ),
+    )
     monkeypatch.setattr(routes_index, "create_vector_store", lambda: FakeVectorStore())
+    monkeypatch.setattr(
+        routes_index,
+        "load_manifest",
+        lambda path: IndexManifest(
+            documents={
+                "manual/a.html": ManifestEntry(content_hash="a", chunk_ids=["a:1"]),
+                "manual/b.html": ManifestEntry(content_hash="b", chunk_ids=["b:1"]),
+            },
+            index_signature="current-signature",
+        ),
+    )
+    monkeypatch.setattr(routes_index, "build_index_signature", lambda **kwargs: "current-signature")
+    monkeypatch.setattr(routes_index, "is_rebuild_pending", lambda path: False)
+    monkeypatch.setattr(
+        routes_index,
+        "get_manifest_modified_at",
+        lambda path: "2026-07-21T10:00:00+00:00",
+    )
     client = TestClient(create_app())
 
     response = client.get("/api/index/status")
@@ -101,7 +133,15 @@ def test_index_status_endpoint_reports_vector_store_count(monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
     assert response.json()["chunks"] == 12
+    assert response.json()["documents"] == 2
+    assert response.json()["last_built_at"] == "2026-07-21T10:00:00+00:00"
+    assert response.json()["index_signature"] == "current-signature"
+    assert response.json()["current_signature"] == "current-signature"
+    assert response.json()["config_matches"] is True
+    assert response.json()["rebuild_pending"] is False
     assert response.json()["persist_dir"] == "storage/chroma"
+    assert response.json()["manifest_path"] == str(manifest_path)
+    assert response.json()["issue"] is None
 
 
 # 验证索引为空时状态接口会返回 empty，方便部署后判断是否需要先构建索引。
@@ -113,7 +153,22 @@ def test_index_status_endpoint_reports_empty_vector_store(monkeypatch):
 
     import app.api.routes_index as routes_index
 
+    monkeypatch.setattr(
+        routes_index,
+        "get_settings",
+        lambda: SimpleNamespace(
+            chroma_persist_dir="storage/chroma",
+            index_manifest_path="storage/processed/test_manifest.json",
+            embedding_model_name="test-embedding-model",
+            chunk_size=700,
+            chunk_overlap=100,
+        ),
+    )
     monkeypatch.setattr(routes_index, "create_vector_store", lambda: FakeVectorStore())
+    monkeypatch.setattr(routes_index, "load_manifest", lambda path: None)
+    monkeypatch.setattr(routes_index, "build_index_signature", lambda **kwargs: "current-signature")
+    monkeypatch.setattr(routes_index, "is_rebuild_pending", lambda path: False)
+    monkeypatch.setattr(routes_index, "get_manifest_modified_at", lambda path: None)
     client = TestClient(create_app())
 
     response = client.get("/api/index/status")
@@ -121,6 +176,123 @@ def test_index_status_endpoint_reports_empty_vector_store(monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] == "empty"
     assert response.json()["chunks"] == 0
+    assert response.json()["documents"] == 0
+    assert response.json()["config_matches"] is False
+
+
+# 验证索引配置变化后状态会标记为 stale，提醒调用方先重建再提供问答。
+def test_index_status_endpoint_reports_stale_configuration(monkeypatch):
+    class FakeVectorStore:
+        # 模拟仍保留旧配置向量的非空向量库。
+        def count(self):
+            return 12
+
+    import app.api.routes_index as routes_index
+    from app.rag.index_manifest import IndexManifest
+
+    monkeypatch.setattr(
+        routes_index,
+        "get_settings",
+        lambda: SimpleNamespace(
+            chroma_persist_dir="storage/chroma",
+            index_manifest_path="storage/processed/test_manifest.json",
+            embedding_model_name="new-model",
+            chunk_size=700,
+            chunk_overlap=100,
+        ),
+    )
+    monkeypatch.setattr(routes_index, "create_vector_store", lambda: FakeVectorStore())
+    monkeypatch.setattr(
+        routes_index,
+        "load_manifest",
+        lambda path: IndexManifest(documents={}, index_signature="old-signature"),
+    )
+    monkeypatch.setattr(routes_index, "build_index_signature", lambda **kwargs: "new-signature")
+    monkeypatch.setattr(routes_index, "is_rebuild_pending", lambda path: False)
+    monkeypatch.setattr(routes_index, "get_manifest_modified_at", lambda path: None)
+
+    response = TestClient(create_app()).get("/api/index/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "stale"
+    assert response.json()["config_matches"] is False
+
+
+# 验证存在恢复标记时优先提示需要重建，避免继续使用可能不完整的向量库。
+def test_index_status_endpoint_reports_rebuild_required(monkeypatch):
+    class FakeVectorStore:
+        # 模拟全量重建中断后残留的部分向量。
+        def count(self):
+            return 3
+
+    import app.api.routes_index as routes_index
+    from app.rag.index_manifest import IndexManifest
+
+    monkeypatch.setattr(
+        routes_index,
+        "get_settings",
+        lambda: SimpleNamespace(
+            chroma_persist_dir="storage/chroma",
+            index_manifest_path="storage/processed/test_manifest.json",
+            embedding_model_name="test-model",
+            chunk_size=700,
+            chunk_overlap=100,
+        ),
+    )
+    monkeypatch.setattr(routes_index, "create_vector_store", lambda: FakeVectorStore())
+    monkeypatch.setattr(
+        routes_index,
+        "load_manifest",
+        lambda path: IndexManifest(documents={}, index_signature="current-signature"),
+    )
+    monkeypatch.setattr(routes_index, "build_index_signature", lambda **kwargs: "current-signature")
+    monkeypatch.setattr(routes_index, "is_rebuild_pending", lambda path: True)
+    monkeypatch.setattr(routes_index, "get_manifest_modified_at", lambda path: None)
+
+    response = TestClient(create_app()).get("/api/index/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "rebuild_required"
+    assert response.json()["rebuild_pending"] is True
+
+
+# 验证 manifest 损坏时状态接口返回可诊断信息，而不是产生未处理的 500 异常。
+def test_index_status_endpoint_reports_manifest_error(monkeypatch):
+    class FakeVectorStore:
+        # 模拟 manifest 损坏时仍然存在的旧向量。
+        def count(self):
+            return 12
+
+    import app.api.routes_index as routes_index
+    from app.rag.index_manifest import ManifestFormatError
+
+    monkeypatch.setattr(
+        routes_index,
+        "get_settings",
+        lambda: SimpleNamespace(
+            chroma_persist_dir="storage/chroma",
+            index_manifest_path="storage/processed/test_manifest.json",
+            embedding_model_name="test-model",
+            chunk_size=700,
+            chunk_overlap=100,
+        ),
+    )
+    monkeypatch.setattr(routes_index, "create_vector_store", lambda: FakeVectorStore())
+
+    # 模拟读取到结构损坏的索引清单。
+    def fail_to_load_manifest(path):
+        raise ManifestFormatError("索引清单损坏，请执行全量重建。")
+
+    monkeypatch.setattr(routes_index, "load_manifest", fail_to_load_manifest)
+    monkeypatch.setattr(routes_index, "build_index_signature", lambda **kwargs: "current-signature")
+    monkeypatch.setattr(routes_index, "is_rebuild_pending", lambda path: False)
+    monkeypatch.setattr(routes_index, "get_manifest_modified_at", lambda path: None)
+
+    response = TestClient(create_app()).get("/api/index/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "error"
+    assert response.json()["issue"] == "索引清单损坏，请执行全量重建。"
 
 
 # 验证索引接口默认执行增量更新，并在成功后清理 RAG 工厂缓存。
