@@ -1,6 +1,6 @@
-# KF RAG 问答助手
+# KingIAsk
 
-KF RAG 问答助手是一个面向 KF 产品使用手册的问答系统。它会从 `data/help` 加载手册文档，构建本地 Chroma 向量库，再通过 DeepSeek 生成带资料来源和相关图片的回答。
+KingIAsk 是一个面向 KF 产品使用手册的企业级 RAG 问答助手。它会从 `data/help` 加载手册文档，构建本地 Chroma 向量库，再通过 DeepSeek 生成带资料来源和相关图片的回答。
 
 当前版本优先保证本地轻量可运行，同时保留企业级产品需要的接口、配置、健康检查、评估和压测入口。
 
@@ -14,22 +14,19 @@ KF RAG 问答助手是一个面向 KF 产品使用手册的问答系统。它会
 - 使用 DeepSeek 生成最终回答。
 - 支持向量检索和关键词召回混合排序。
 - 支持资料来源去重、证据编号、图片数量限制和拒答保护。
-- 提供 FastAPI 问答接口和 Streamlit Demo 页面。
+- 提供 FastAPI 问答接口、KingIAsk Vue 前端和 Streamlit 轻量 Demo 页面。
 - 提供索引状态、就绪检查、评估脚本和轻量压测脚本。
 
 ## 目录说明
 
 ```text
-backend/app/         FastAPI 服务和 RAG 核心代码
-backend/demo/        Streamlit Demo 页面
-backend/scripts/     索引构建、命令行问答、评估、压测脚本
-backend/tests/       自动化测试和轻量评估问题
-frontend/            KingIAsk Vue 前端工作台
-data/help/           KF 产品手册原始文档，本地放置，不提交仓库
-storage/chroma/      Chroma 向量库持久化目录，本地生成，不提交仓库
-storage/processed/   文档哈希和 chunk ID 清单，本地生成，不提交仓库
-.env.example         可提交的环境变量样例
-.env                 本地真实配置，不提交仓库
+backend/     FastAPI RAG 后端，包含 API、RAG 核心代码、脚本和测试
+frontend/    KingIAsk Vue 前端工作台
+data/        KF 产品手册原始文档，本地放置，不提交仓库
+storage/     Chroma 向量库和增量索引清单，本地生成，不提交仓库
+docs/        本地学习和设计文档，不提交仓库
+.env.example 可提交的环境变量样例
+.env         本地真实配置，不提交仓库
 ```
 
 ## 环境准备
@@ -53,15 +50,51 @@ DEEPSEEK_API_KEY=你的 DeepSeek API Key
 
 第一次构建索引时会加载 embedding 模型。如果本机没有缓存，需要能访问 HuggingFace 或提前准备好模型缓存。
 
-前端使用 Vue 3、Vite 和 pnpm：
+前端使用 Vue 3、Vite 和 pnpm。进入 `frontend/` 后安装依赖：
 
 ```bash
 cd frontend
 pnpm install
+```
+
+如果你习惯 npm，也可以使用 `npm install` 和 `npm run dev`；本项目开发时默认使用 `pnpm`。
+
+## 本地完整启动顺序
+
+第一次运行时，先准备手册和索引：
+
+```bash
+mkdir -p data/help storage/chroma storage/processed
+```
+
+把 KF 手册放入：
+
+```text
+data/help/
+```
+
+然后构建向量索引：
+
+```bash
+cd backend
+python -m scripts.build_index
+```
+
+索引构建完成后，启动后端 API：
+
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
+
+再启动前端：
+
+```bash
+cd frontend
 pnpm run dev
 ```
 
-前端开发服务默认地址：
+浏览器打开：
 
 ```text
 http://127.0.0.1:5173
@@ -109,6 +142,8 @@ data/help/
 ```
 
 `data/` 已在 `.gitignore` 中忽略，手册文件不会被提交到远程仓库。
+
+如果后续手册更新，只需要重新运行 `python -m scripts.build_index`。系统会对比文档哈希，只处理新增、修改和删除的文件。
 
 ## 构建向量索引
 
