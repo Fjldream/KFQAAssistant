@@ -29,6 +29,7 @@
       <EvidencePanel
         :sources="currentSources"
         :selected-source="chat.selectedSource.value"
+        :api-base-url="settings.settings.value.apiBaseUrl"
         @select-source="chat.selectSource"
         @preview-image="previewImage = $event"
       />

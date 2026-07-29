@@ -34,7 +34,7 @@
           :key="image"
           class="ki-image-thumb"
           type="button"
-          @click="emit('previewImage', image)"
+          @click="emit('previewImage', imageUrl(image))"
         >
           <span>{{ image.split('/').pop() }}</span>
         </button>
@@ -44,11 +44,13 @@
 </template>
 
 <script setup lang="ts">
+import { resolveImageUrl } from "../api/client";
 import type { SourceSnippet } from "../api/types";
 
-defineProps<{
+const props = defineProps<{
   sources: SourceSnippet[];
   selectedSource: SourceSnippet | null;
+  apiBaseUrl: string;
 }>();
 
 const emit = defineEmits<{
@@ -62,5 +64,10 @@ function formatScore(score: number | null): string {
     return "无分数";
   }
   return `相似度 ${(score * 100).toFixed(0)}%`;
+}
+
+// 将来源图片路径转换为浏览器可访问地址。
+function imageUrl(image: string): string {
+  return resolveImageUrl(props.apiBaseUrl, image);
 }
 </script>

@@ -24,6 +24,14 @@ export function normalizeApiBaseUrl(apiBaseUrl: string): string {
   return apiBaseUrl.replace(/\/+$/, "");
 }
 
+// 将后端返回的手册相对图片路径转换成浏览器可访问的图片地址。
+export function resolveImageUrl(apiBaseUrl: string, imagePath: string): string {
+  if (/^https?:\/\//i.test(imagePath)) {
+    return imagePath;
+  }
+  return `${normalizeApiBaseUrl(apiBaseUrl)}/manuals/${imagePath.replace(/^\/+/, "")}`;
+}
+
 // 从后端错误响应中提取用户可读的错误信息。
 async function parseError(response: Response): Promise<ApiError> {
   try {

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.schemas.chat import ChatResponse, SourceSnippet
 from app.main import create_app
 from app.rag.errors import IndexNotReadyError
+from app.core.config import get_settings
 
 
 def test_health_endpoint():
@@ -16,6 +17,28 @@ def test_health_endpoint():
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_manual_images_are_served(tmp_path, monkeypatch):
+    manual_dir = tmp_path / "help"
+    manual_dir.mkdir()
+    image = manual_dir / "example.png"
+    image.write_bytes(b"image")
+    monkeypatch.setenv("DATA_DIR", str(manual_dir))
+    get_settings.cache_clear()
+
+    response = TestClient(create_app()).get("/manuals/example.png")
+
+    assert response.status_code == 200
+
+
+def test_app_starts_when_manual_data_dir_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "missing-help"))
+    get_settings.cache_clear()
+
+    response = TestClient(create_app()).get("/api/health")
+
+    assert response.status_code == 200
 
 
 # 验证就绪检查在核心配置和索引都可用时返回 ready，给部署平台判断服务可接流量。

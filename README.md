@@ -163,6 +163,32 @@ uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --reload
 http://127.0.0.1:8000
 ```
 
+后端还会把 `DATA_DIR` 中的手册静态资源挂载到：
+
+```text
+http://127.0.0.1:8000/manuals/<手册内相对路径>
+```
+
+问答接口返回的图片路径仍然保持为手册相对路径，例如 `html/xxx/1.png`。KingIAsk 前端会自动把它转换为 `/manuals/html/xxx/1.png`，所以用户点击证据图片时可以直接预览原始手册截图。
+
+## 启动 KingIAsk 前端
+
+先启动 API 服务，再运行：
+
+```bash
+cd frontend
+pnpm install
+pnpm run dev
+```
+
+默认访问地址：
+
+```text
+http://127.0.0.1:5173
+```
+
+如果后端地址不是 `http://127.0.0.1:8000`，可以在前端页面右上角设置里修改 API 地址。前端会把设置保存到浏览器本地存储，刷新页面后继续复用。
+
 ## 使用 Docker Compose 部署
 
 服务器上建议使用 Docker Compose 固定运行环境。先准备配置和目录：
@@ -376,9 +402,10 @@ x-api-key: 你的 APP_API_KEY
 
 ## 启动 Demo 页面
 
-先启动 API 服务，再运行：
+Streamlit Demo 是轻量验证页面，正式体验建议优先使用 KingIAsk 前端。先启动 API 服务，再运行：
 
 ```bash
+cd backend
 streamlit run demo/streamlit_app.py
 ```
 
