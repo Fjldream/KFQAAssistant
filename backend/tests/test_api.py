@@ -19,6 +19,23 @@ def test_health_endpoint():
     assert response.json()["status"] == "ok"
 
 
+def test_cors_allows_local_frontend_origin(monkeypatch):
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "http://127.0.0.1:5173")
+    get_settings.cache_clear()
+    client = TestClient(create_app())
+
+    response = client.options(
+        "/api/health",
+        headers={
+            "Origin": "http://127.0.0.1:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+
+
 def test_manual_images_are_served(tmp_path, monkeypatch):
     manual_dir = tmp_path / "help"
     manual_dir.mkdir()

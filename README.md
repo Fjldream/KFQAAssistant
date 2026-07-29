@@ -108,6 +108,7 @@ http://127.0.0.1:5173
 APP_ENV=local
 DISABLE_AUTH=true
 APP_API_KEY=
+CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
 
 DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=https://api.deepseek.com
@@ -223,6 +224,8 @@ http://127.0.0.1:5173
 ```
 
 如果后端地址不是 `http://127.0.0.1:8000`，可以在前端页面右上角设置里修改 API 地址。前端会把设置保存到浏览器本地存储，刷新页面后继续复用。
+
+如果页面显示“后端未连接”，先确认后端服务已经启动，并检查 `.env` 中的 `CORS_ALLOWED_ORIGINS` 是否包含当前前端地址，例如 `http://127.0.0.1:5173`。
 
 ## 使用 Docker Compose 部署
 

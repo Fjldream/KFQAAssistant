@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     app_env: str = "local"
     app_api_key: str = ""
     disable_auth: bool = True
+    cors_allowed_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
 
     deepseek_api_key: str = Field(default="", repr=False)
     deepseek_base_url: str = "https://api.deepseek.com"
