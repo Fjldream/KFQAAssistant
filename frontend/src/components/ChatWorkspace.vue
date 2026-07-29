@@ -41,6 +41,25 @@
           </button>
         </div>
       </article>
+
+      <article
+        v-if="isAsking"
+        class="ki-message ki-message--assistant ki-thinking-message"
+        aria-label="KingIAsk 正在思考"
+      >
+        <div class="ki-message-meta">KingIAsk</div>
+        <div class="ki-thinking-content">
+          <span class="ki-thinking-orbit" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+          <div>
+            <strong>正在检索手册</strong>
+            <p>整理依据并组织回答</p>
+          </div>
+        </div>
+      </article>
     </div>
 
     <p v-if="errorMessage" class="ki-error-text">{{ errorMessage }}</p>
@@ -59,7 +78,8 @@
           重试
         </button>
         <button class="ki-primary-button" type="submit" :disabled="isAsking || !draft.trim()">
-          <Send :size="16" aria-hidden="true" />
+          <span v-if="isAsking" class="ki-button-spinner" aria-hidden="true"></span>
+          <Send v-else :size="16" aria-hidden="true" />
           {{ isAsking ? "思考中" : "提问" }}
         </button>
       </div>

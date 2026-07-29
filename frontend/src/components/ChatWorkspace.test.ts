@@ -51,4 +51,18 @@ describe("ChatWorkspace", () => {
     expect(wrapper.html()).toContain("<strong>步骤</strong>");
     expect(wrapper.text()).toContain("工程开发-Windows");
   });
+
+  it("renders a thinking indicator while asking", () => {
+    const wrapper = mount(ChatWorkspace, {
+      props: {
+        messages: [],
+        isAsking: true,
+        errorMessage: null,
+      },
+    });
+
+    expect(wrapper.find(".ki-thinking-message").exists()).toBe(true);
+    expect(wrapper.text()).toContain("正在检索手册");
+    expect(wrapper.text()).toContain("组织回答");
+  });
 });
