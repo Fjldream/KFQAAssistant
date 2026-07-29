@@ -24,6 +24,7 @@ backend/app/         FastAPI 服务和 RAG 核心代码
 backend/demo/        Streamlit Demo 页面
 backend/scripts/     索引构建、命令行问答、评估、压测脚本
 backend/tests/       自动化测试和轻量评估问题
+frontend/            KingIAsk Vue 前端工作台
 data/help/           KF 产品手册原始文档，本地放置，不提交仓库
 storage/chroma/      Chroma 向量库持久化目录，本地生成，不提交仓库
 storage/processed/   文档哈希和 chunk ID 清单，本地生成，不提交仓库
@@ -51,6 +52,20 @@ DEEPSEEK_API_KEY=你的 DeepSeek API Key
 ```
 
 第一次构建索引时会加载 embedding 模型。如果本机没有缓存，需要能访问 HuggingFace 或提前准备好模型缓存。
+
+前端使用 Vue 3、Vite 和 pnpm：
+
+```bash
+cd frontend
+pnpm install
+pnpm run dev
+```
+
+前端开发服务默认地址：
+
+```text
+http://127.0.0.1:5173
+```
 
 ## 关键配置
 
