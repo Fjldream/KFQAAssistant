@@ -13,7 +13,7 @@ COPY app ./app
 COPY demo ./demo
 COPY scripts ./scripts
 
-RUN mkdir -p /app/data/help /app/storage/chroma
+RUN mkdir -p /app/data/help /app/storage/chroma /app/storage/processed
 
 EXPOSE 8000
 

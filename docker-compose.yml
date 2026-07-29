@@ -1,7 +1,8 @@
 services:
   kf-rag-api:
     build:
-      context: .
+      context: ./backend
+      dockerfile: Dockerfile
     image: kf-rag-assistant:latest
     container_name: kf-rag-api
     env_file:

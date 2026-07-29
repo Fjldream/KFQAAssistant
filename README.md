@@ -181,6 +181,8 @@ INDEX_MANIFEST_PATH=storage/processed/index_manifest.json
 docker compose build
 ```
 
+`docker-compose.yml` 会使用 `./backend` 作为后端镜像构建上下文，实际读取的是 `backend/Dockerfile` 和 `backend/.dockerignore`。
+
 第一次部署或手册更新后，先构建向量索引：
 
 ```bash

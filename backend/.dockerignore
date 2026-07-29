@@ -12,3 +12,4 @@ venv/
 data/
 storage/
 docs/
+tests/.pytest_cache/
