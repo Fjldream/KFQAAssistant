@@ -9,6 +9,7 @@ from app.rag.retriever import RetrievedChunk
 
 
 KEYWORD_SCORE_WEIGHT = 0.08
+NEIGHBOR_SCORE_PENALTY = 0.001
 
 
 # 从中文问题中扩展关键词，补足“操作系统”等问法和手册里的“系统环境/软件要求”之间的表达差异。
@@ -66,6 +67,15 @@ def diversify_results(results: list[RetrievedChunk], top_k: int) -> list[Retriev
             return selected
 
     return selected
+
+
+# 根据当前 chunk ID 推导同一文档的前后相邻 chunk ID。
+def neighbor_chunk_ids(chunk_id: str, radius: int = 1) -> list[str]:
+    source_path, separator, raw_index = chunk_id.rpartition("::")
+    if not separator or not raw_index.isdigit():
+        return []
+    index = int(raw_index)
+    return [f"{source_path}::{neighbor}" for neighbor in range(max(0, index - radius), index + radius + 1) if neighbor != index]
 
 
 # Chroma 向量库封装，负责写入 chunks 和执行相似度检索。
@@ -140,7 +150,47 @@ class ChromaVectorStore:
             key=lambda item: combined_score(query, item),
             reverse=True,
         )
-        return diversify_results(ranked, top_k)
+        diversified = diversify_results(ranked, top_k)
+        return self._include_neighbor_chunks(diversified)
+
+    # 为主要命中结果补充同文档前后相邻 chunk，让操作流程回答能拿到更完整上下文。
+    def _include_neighbor_chunks(self, primary_results: list[RetrievedChunk]) -> list[RetrievedChunk]:
+        if not primary_results:
+            return []
+
+        selected_ids = {item.chunk.id for item in primary_results}
+        neighbor_ids_by_primary: dict[str, list[str]] = {}
+        neighbor_ids: list[str] = []
+        for item in primary_results:
+            for chunk_id in neighbor_chunk_ids(item.chunk.id):
+                if chunk_id not in selected_ids and chunk_id not in neighbor_ids:
+                    neighbor_ids.append(chunk_id)
+                    neighbor_ids_by_primary.setdefault(item.chunk.id, []).append(chunk_id)
+
+        if not neighbor_ids:
+            return primary_results
+
+        neighbor_results = {item.chunk.id: item for item in self._chunks_by_ids(neighbor_ids)}
+        expanded_results: list[RetrievedChunk] = []
+        for item in primary_results:
+            expanded_results.append(item)
+            for chunk_id in neighbor_ids_by_primary.get(item.chunk.id, []):
+                neighbor = neighbor_results.get(chunk_id)
+                if neighbor:
+                    expanded_results.append(neighbor)
+        return expanded_results
+
+    # 按 chunk ID 从 Chroma 读回完整 DocumentChunk，用于邻居上下文补全。
+    def _chunks_by_ids(self, chunk_ids: list[str]) -> list[RetrievedChunk]:
+        raw = self.store.get(ids=chunk_ids, include=["documents", "metadatas"])
+        documents = raw.get("documents", [])
+        metadatas = raw.get("metadatas", [])
+        results: list[RetrievedChunk] = []
+        for document, metadata in zip(documents, metadatas):
+            metadata = metadata or {}
+            chunk = self._document_to_chunk(Document(page_content=str(document), metadata=metadata))
+            results.append(RetrievedChunk(chunk=chunk, score=0.0 - NEIGHBOR_SCORE_PENALTY))
+        return results
 
     # 将 LangChain Document 还原为业务层 DocumentChunk。
     def _document_to_chunk(self, document: Document) -> DocumentChunk:
