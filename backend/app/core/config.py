@@ -2,11 +2,22 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = BACKEND_ROOT.parent if BACKEND_ROOT.name == "backend" else BACKEND_ROOT
+
+
+# 将相对运行路径解析到仓库根目录，避免从 backend/ 启动时写入 backend/storage。
+def resolve_runtime_path(path: Path) -> Path:
+    if path.is_absolute():
+        return path
+    return REPO_ROOT / path
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), env_file_encoding="utf-8", extra="ignore")
 
     app_env: str = "local"
     app_api_key: str = ""
@@ -26,6 +37,12 @@ class Settings(BaseSettings):
     top_k: int = 5
     max_images_per_source: int = 5
     max_images_per_answer: int = 8
+
+    # 统一规范化运行数据路径，让本地、测试和容器入口共享同一套解析规则。
+    @field_validator("chroma_persist_dir", "index_manifest_path", "data_dir", mode="after")
+    @classmethod
+    def normalize_runtime_paths(cls, value: Path) -> Path:
+        return resolve_runtime_path(value)
 
 
 @lru_cache

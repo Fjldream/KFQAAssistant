@@ -20,10 +20,10 @@ KF RAG 问答助手是一个面向 KF 产品使用手册的问答系统。它会
 ## 目录说明
 
 ```text
-app/                 FastAPI 服务和 RAG 核心代码
-demo/                Streamlit Demo 页面
-scripts/             索引构建、命令行问答、评估、压测脚本
-tests/               自动化测试和轻量评估问题
+backend/app/         FastAPI 服务和 RAG 核心代码
+backend/demo/        Streamlit Demo 页面
+backend/scripts/     索引构建、命令行问答、评估、压测脚本
+backend/tests/       自动化测试和轻量评估问题
 data/help/           KF 产品手册原始文档，本地放置，不提交仓库
 storage/chroma/      Chroma 向量库持久化目录，本地生成，不提交仓库
 storage/processed/   文档哈希和 chunk ID 清单，本地生成，不提交仓库
@@ -38,7 +38,9 @@ storage/processed/   文档哈希和 chunk ID 清单，本地生成，不提交�
 ```bash
 conda create -n kf-rag python=3.11 -y
 conda activate kf-rag
+cd backend
 pip install -r requirements.txt
+cd ..
 cp .env.example .env
 ```
 
@@ -96,6 +98,7 @@ data/help/
 ## 构建向量索引
 
 ```bash
+cd backend
 python -m scripts.build_index
 ```
 
@@ -115,6 +118,7 @@ python -m scripts.build_index
 从不带 manifest 的旧版本第一次升级运行时，系统会自动执行一次全量重建来建立基线。以后再次运行就是增量更新。修改了 embedding 模型或分块规则时，使用下面的命令强制全量重建：
 
 ```bash
+cd backend
 python -m scripts.build_index --full
 ```
 
@@ -127,12 +131,14 @@ manifest 同时保存索引配置指纹。embedding 模型、`CHUNK_SIZE`、`CHU
 开发环境推荐：
 
 ```bash
+cd backend
 uvicorn app.main:app --reload
 ```
 
 也可以显式指定地址和端口：
 
 ```bash
+cd backend
 uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --reload
 ```
 
@@ -374,6 +380,7 @@ KF_RAG_API_URL=http://你的服务地址/api/chat
 ## 命令行问答
 
 ```bash
+cd backend
 python -m scripts.ask "页面编辑器主要包括哪些区域？"
 ```
 
@@ -384,12 +391,13 @@ python -m scripts.ask "页面编辑器主要包括哪些区域？"
 评估集位于：
 
 ```text
-tests/eval_questions.json
+backend/tests/eval_questions.json
 ```
 
 运行评估：
 
 ```bash
+cd backend
 python -m scripts.evaluate
 ```
 

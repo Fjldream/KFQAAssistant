@@ -2,10 +2,12 @@ from pathlib import Path
 
 import yaml
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 # 读取仓库根目录下的文本文件，供部署配置测试复用。
 def _read_text(path: str) -> str:
-    return Path(path).read_text(encoding="utf-8")
+    return (REPO_ROOT / path).read_text(encoding="utf-8")
 
 
 # 验证 Dockerfile 固定 Python 版本、安装依赖，并使用生产方式启动 FastAPI。

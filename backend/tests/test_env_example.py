@@ -2,6 +2,8 @@ from pathlib import Path
 
 from app.core.config import Settings
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 # 把 settings 字段名转换成 .env 中使用的大写环境变量名。
 def _setting_env_name(field_name: str) -> str:
@@ -10,7 +12,7 @@ def _setting_env_name(field_name: str) -> str:
 
 # 读取 .env.example 中声明过的环境变量名，忽略空行和注释。
 def _load_example_env_names() -> set[str]:
-    lines = Path(".env.example").read_text(encoding="utf-8").splitlines()
+    lines = (REPO_ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
     return {line.split("=", 1)[0].strip() for line in lines if line.strip() and not line.startswith("#")}
 
 
