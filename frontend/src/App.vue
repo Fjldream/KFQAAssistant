@@ -1,27 +1,124 @@
 <template>
-  <main class="ki-app-shell">
-    <section class="ki-sidebar" aria-label="知识导航">
-      <div>
-        <p class="ki-brand">KingIAsk</p>
-        <p class="ki-subtitle">KF 产品知识问答助手</p>
-      </div>
-      <div class="ki-status">
-        <span class="ki-status-dot" aria-hidden="true"></span>
-        <span>前端工作台初始化完成</span>
-      </div>
-    </section>
+  <AppShell>
+    <template #sidebar>
+      <LeftSidebar
+        :health-label="healthLabel"
+        :index-label="indexLabel"
+        :documents="indexStatus.indexStatus.value?.documents ?? 0"
+        :chunks="indexStatus.indexStatus.value?.chunks ?? 0"
+        :last-built-at="indexStatus.indexStatus.value?.last_built_at ?? null"
+        :common-questions="commonQuestions"
+        :recent-questions="history.recentQuestions.value"
+        @ask="handleAsk"
+        @open-settings="settingsOpen = true"
+        @clear-history="history.clearQuestions"
+      />
+    </template>
 
-    <section class="ki-chat" aria-label="问答工作区">
-      <div class="ki-welcome">
-        <p class="ki-section-label">问答工作区</p>
-        <h1>KingIAsk</h1>
-        <p>面向 KF 产品手册的正式知识问答工作台。</p>
-      </div>
-    </section>
+    <ChatWorkspace
+      :messages="chat.messages.value"
+      :is-asking="chat.isAsking.value"
+      :error-message="chat.errorMessage.value || indexStatus.errorMessage.value"
+      @ask="handleAsk"
+      @clear="chat.clearChat"
+      @retry="chat.retryLastQuestion"
+      @select-source="chat.selectSource"
+    />
 
-    <aside class="ki-evidence" aria-label="证据区">
-      <p class="ki-section-label">证据与图片</p>
-      <p>后续会展示来源片段、证据编号和手册截图。</p>
-    </aside>
-  </main>
+    <template #evidence>
+      <EvidencePanel
+        :sources="currentSources"
+        :selected-source="chat.selectedSource.value"
+        @select-source="chat.selectSource"
+        @preview-image="previewImage = $event"
+      />
+    </template>
+  </AppShell>
+
+  <SettingsDialog
+    :open="settingsOpen"
+    :api-base-url="settings.settings.value.apiBaseUrl"
+    :api-key="settings.settings.value.apiKey"
+    @close="settingsOpen = false"
+    @save="handleSaveSettings"
+    @reset="settings.resetSettings"
+  />
+
+  <ImagePreview :image="previewImage" @close="previewImage = null" />
 </template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import type { ApiSettings, SourceSnippet } from "./api/types";
+import AppShell from "./components/AppShell.vue";
+import ChatWorkspace from "./components/ChatWorkspace.vue";
+import EvidencePanel from "./components/EvidencePanel.vue";
+import ImagePreview from "./components/ImagePreview.vue";
+import LeftSidebar from "./components/LeftSidebar.vue";
+import SettingsDialog from "./components/SettingsDialog.vue";
+import { useChat } from "./composables/useChat";
+import { useIndexStatus } from "./composables/useIndexStatus";
+import { useLocalHistory } from "./composables/useLocalHistory";
+import { useSettings } from "./composables/useSettings";
+
+const commonQuestions = [
+  "如何创建采集工程？",
+  "客户端支持哪些系统？",
+  "页面编辑器主要包括哪些区域？",
+  "如何查看运维中心日志？",
+];
+
+const settings = useSettings();
+const history = useLocalHistory();
+const chat = useChat(settings.settings);
+const indexStatus = useIndexStatus(settings.settings);
+const settingsOpen = ref(false);
+const previewImage = ref<string | null>(null);
+
+const healthLabel = computed(() => {
+  if (indexStatus.isLoading.value) {
+    return "正在检查";
+  }
+  return indexStatus.health.value?.status === "ok" ? "后端在线" : "后端未连接";
+});
+
+const indexLabel = computed(() => {
+  const status = indexStatus.indexStatus.value?.status;
+  if (status === "ready") {
+    return "索引正常";
+  }
+  if (status === "stale" || status === "rebuild_required") {
+    return "需要重建索引";
+  }
+  if (status === "empty") {
+    return "索引为空";
+  }
+  return "等待状态";
+});
+
+const currentSources = computed<SourceSnippet[]>(() => {
+  const assistantMessages = chat.messages.value.filter((message) => message.role === "assistant");
+  return assistantMessages.at(-1)?.sources ?? [];
+});
+
+// 发送问题并在成功获得回答后记录到最近会话。
+async function handleAsk(question: string): Promise<void> {
+  const beforeCount = chat.messages.value.length;
+  await chat.askQuestion(question);
+  const hasNewAssistantAnswer = chat.messages.value.slice(beforeCount).some((message) => message.role === "assistant");
+  if (hasNewAssistantAnswer) {
+    history.addQuestion(question);
+  }
+}
+
+// 保存设置后刷新后端状态，并关闭设置弹窗。
+function handleSaveSettings(nextSettings: ApiSettings): void {
+  settings.updateSettings(nextSettings);
+  settingsOpen.value = false;
+  void indexStatus.refresh();
+}
+
+onMounted(() => {
+  void indexStatus.refresh();
+});
+</script>
