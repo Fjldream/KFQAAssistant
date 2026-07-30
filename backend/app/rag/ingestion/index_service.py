@@ -3,10 +3,10 @@ import hashlib
 import json
 from pathlib import Path
 
-from app.rag.document_loader import discover_document_paths, load_document
-from app.rag.index_manifest import IndexManifest, ManifestEntry, hash_file, load_manifest, save_manifest
+from app.rag.ingestion.document_loader import discover_document_paths, load_document
+from app.rag.ingestion.index_manifest import IndexManifest, ManifestEntry, hash_file, load_manifest, save_manifest
 from app.rag.models import DocumentChunk, ManualDocument
-from app.rag.splitter import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE, split_documents
+from app.rag.ingestion.splitter import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE, split_documents
 
 
 INDEX_PIPELINE_VERSION = 1

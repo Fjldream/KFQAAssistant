@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-import app.rag.index_service as index_service
-from app.rag.index_service import update_index
+import app.rag.ingestion.index_service as index_service
+from app.rag.ingestion.index_service import update_index
 from app.rag.models import DocumentChunk
 
 

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import re
 
-from app.rag.retriever import RetrievedChunk
+from app.rag.retrieval.retriever import RetrievedChunk
 
 
 WORKFLOW_QUERY_TERMS = ("如何", "怎么", "步骤", "启动", "运行", "创建", "新建", "部署", "发布")

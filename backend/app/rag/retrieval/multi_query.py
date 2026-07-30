@@ -1,4 +1,4 @@
-from app.rag.retriever import RetrievedChunk
+from app.rag.retrieval.retriever import RetrievedChunk
 
 
 # 合并多条查询的召回结果，同一 chunk 只保留最高相关性版本。

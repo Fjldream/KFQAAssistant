@@ -1,6 +1,6 @@
-from app.rag.context_builder import build_context_blocks, format_context_blocks
+from app.rag.generation.context_builder import build_context_blocks, format_context_blocks
 from app.rag.models import DocumentChunk
-from app.rag.retriever import RetrievedChunk
+from app.rag.retrieval.retriever import RetrievedChunk
 
 
 def test_context_builder_includes_source_path_images_and_snippet():

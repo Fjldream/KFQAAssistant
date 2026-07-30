@@ -3,7 +3,7 @@ from typing import Protocol
 
 from app.rag.errors import IndexNotReadyError
 from app.rag.models import DocumentChunk
-from app.rag.query_rewriter import QueryRewriterProtocol
+from app.rag.retrieval.query_rewriter import QueryRewriterProtocol
 
 
 # 表示一次检索命中的 chunk，同时带有向量库返回的相关性分数。
@@ -55,7 +55,7 @@ class RetrieverService:
         if self.query_rewriter is None:
             return self._rerank(query, self.vector_store.similarity_search(query, self.top_k))
 
-        from app.rag.multi_query import merge_retrieved_candidates
+        from app.rag.retrieval.multi_query import merge_retrieved_candidates
 
         rewrite_result = self.query_rewriter.rewrite(query)
         results_by_query = {

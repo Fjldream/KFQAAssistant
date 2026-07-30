@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from app.rag.answer_policy import is_no_answer
+from app.rag.generation.answer_policy import is_no_answer
 from app.rag.factory import create_rag_chain
 from app.schemas.chat import ChatResponse
 

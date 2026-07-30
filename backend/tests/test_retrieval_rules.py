@@ -1,4 +1,4 @@
-from app.rag.retrieval_rules import expand_terms_with_rules, workflow_intent_score
+from app.rag.retrieval.retrieval_rules import expand_terms_with_rules, workflow_intent_score
 
 
 def test_expand_terms_with_rules_loads_project_start_terms():

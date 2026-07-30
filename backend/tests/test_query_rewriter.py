@@ -1,6 +1,6 @@
 import httpx
 
-from app.rag.query_rewriter import StaticQueryRewriter, analyze_query
+from app.rag.retrieval.query_rewriter import StaticQueryRewriter, analyze_query
 
 
 def test_analyze_query_marks_workflow_question():
@@ -60,7 +60,7 @@ def test_deepseek_query_rewriter_parses_json_response(monkeypatch):
             captured["payload"] = json
             return FakeResponse()
 
-    import app.rag.query_rewriter as query_rewriter
+    import app.rag.retrieval.query_rewriter as query_rewriter
 
     monkeypatch.setattr(query_rewriter.httpx, "Client", FakeHttpClient)
     rewriter = query_rewriter.DeepSeekQueryRewriter(
@@ -96,7 +96,7 @@ def test_deepseek_query_rewriter_falls_back_to_static_rewriter(monkeypatch):
         def post(self, url, json, headers):
             raise httpx.TimeoutException("timeout")
 
-    import app.rag.query_rewriter as query_rewriter
+    import app.rag.retrieval.query_rewriter as query_rewriter
 
     monkeypatch.setattr(query_rewriter.httpx, "Client", FakeHttpClient)
     rewriter = query_rewriter.DeepSeekQueryRewriter(

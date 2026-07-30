@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.rag.index_manifest import (
+from app.rag.ingestion.index_manifest import (
     IndexManifest,
     ManifestEntry,
     ManifestFormatError,

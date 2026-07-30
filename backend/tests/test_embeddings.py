@@ -2,8 +2,8 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 import time
 
-import app.rag.embeddings as embeddings_module
-from app.rag.embeddings import LazyEmbeddings
+import app.rag.retrieval.embeddings as embeddings_module
+from app.rag.retrieval.embeddings import LazyEmbeddings
 
 
 # 提供可记录文档和问题调用的真实 embedding 测试替身。

@@ -1,7 +1,7 @@
 from app.rag.models import DocumentChunk
 from app.rag.errors import IndexNotReadyError
-from app.rag.retriever import RetrievedChunk, RetrieverService
-from app.rag.vector_store import combined_score, diversify_results, keyword_score
+from app.rag.retrieval.retriever import RetrievedChunk, RetrieverService
+from app.rag.retrieval.vector_store import combined_score, diversify_results, keyword_score
 
 
 class FakeVectorStore:
@@ -34,7 +34,7 @@ class FakeEmptyVectorStore:
 class FakeRewriter:
     # 返回原问题和一个运行类改写问题，模拟 Query Rewrite 输出。
     def rewrite(self, question: str):
-        from app.rag.query_rewriter import QueryAnalysis, RewriteResult
+        from app.rag.retrieval.query_rewriter import QueryAnalysis, RewriteResult
 
         return RewriteResult(
             original_question=question,

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.rag.image_resolver import extract_markdown_images, mark_html_images, mark_markdown_images, resolve_image_path
+from app.rag.ingestion.image_resolver import extract_markdown_images, mark_html_images, mark_markdown_images, resolve_image_path
 
 
 def test_extract_markdown_images_supports_windows_style_paths():

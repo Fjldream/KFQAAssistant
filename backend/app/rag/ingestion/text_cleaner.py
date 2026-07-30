@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 
-from app.rag.image_resolver import IMAGE_PATTERN
+from app.rag.ingestion.image_resolver import IMAGE_PATTERN
 
 
 # 压缩多余空行，保留段落边界，让后续切块时文本更稳定。

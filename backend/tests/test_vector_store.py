@@ -1,5 +1,5 @@
 from app.rag.models import DocumentChunk
-from app.rag.vector_store import ChromaVectorStore
+from app.rag.retrieval.vector_store import ChromaVectorStore
 from langchain_core.documents import Document
 
 

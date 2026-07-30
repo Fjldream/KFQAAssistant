@@ -2,12 +2,12 @@ from functools import lru_cache
 
 from app.core.config import get_settings
 from app.rag.chain import RagChain
-from app.rag.embeddings import LazyEmbeddings
-from app.rag.llm import DeepSeekClient
-from app.rag.query_rewriter import DeepSeekQueryRewriter
-from app.rag.reranker import rerank
-from app.rag.retriever import RetrieverService
-from app.rag.vector_store import ChromaVectorStore
+from app.rag.retrieval.embeddings import LazyEmbeddings
+from app.rag.generation.llm import DeepSeekClient
+from app.rag.retrieval.query_rewriter import DeepSeekQueryRewriter
+from app.rag.retrieval.reranker import rerank
+from app.rag.retrieval.retriever import RetrieverService
+from app.rag.retrieval.vector_store import ChromaVectorStore
 
 
 # 创建真实 Chroma 向量库实例，集中管理 embedding 和持久化目录配置。

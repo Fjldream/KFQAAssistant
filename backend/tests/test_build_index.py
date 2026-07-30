@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import scripts.build_index as build_index
-from app.rag.index_service import IndexUpdateResult
+from app.rag.ingestion.index_service import IndexUpdateResult
 
 
 # 创建 CLI 测试使用的固定索引结果。

@@ -1,5 +1,5 @@
 from app.rag.models import DocumentChunk
-from app.rag.retriever import RetrievedChunk
+from app.rag.retrieval.retriever import RetrievedChunk
 from scripts.inspect_retrieval import format_retrieval_results
 
 

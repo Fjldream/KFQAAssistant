@@ -1,6 +1,6 @@
 from app.rag.models import DocumentChunk
-from app.rag.multi_query import merge_retrieved_candidates
-from app.rag.retriever import RetrievedChunk
+from app.rag.retrieval.multi_query import merge_retrieved_candidates
+from app.rag.retrieval.retriever import RetrievedChunk
 
 
 def test_merge_retrieved_candidates_deduplicates_by_chunk_id():

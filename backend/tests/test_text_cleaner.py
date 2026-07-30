@@ -1,4 +1,4 @@
-from app.rag.text_cleaner import clean_html, clean_markdown
+from app.rag.ingestion.text_cleaner import clean_html, clean_markdown
 
 
 def test_clean_markdown_removes_image_markup_but_keeps_text():

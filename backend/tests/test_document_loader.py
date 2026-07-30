@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.rag.document_loader import discover_document_paths, load_document, load_documents
+from app.rag.ingestion.document_loader import discover_document_paths, load_document, load_documents
 
 
 # 验证文档发现会排除已有 Markdown 双胞胎的 HTML 文件。

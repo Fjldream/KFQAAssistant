@@ -1,6 +1,6 @@
 from app.rag.chain import RagChain
 from app.rag.models import DocumentChunk
-from app.rag.retriever import RetrievedChunk
+from app.rag.retrieval.retriever import RetrievedChunk
 
 
 class FakeRetriever:

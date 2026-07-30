@@ -1,7 +1,7 @@
 import httpx
 
 from app.rag.errors import LLMGenerationError
-from app.rag.llm import DeepSeekClient
+from app.rag.generation.llm import DeepSeekClient
 
 
 def test_deepseek_client_does_not_use_system_proxy(monkeypatch):
@@ -28,7 +28,7 @@ def test_deepseek_client_does_not_use_system_proxy(monkeypatch):
             captured["payload"] = json
             return FakeResponse()
 
-    import app.rag.llm as llm
+    import app.rag.generation.llm as llm
 
     monkeypatch.setattr(llm.httpx, "Client", FakeHttpClient)
     client = DeepSeekClient(api_key="test", base_url="https://example.com", model="deepseek-v4-flash")
@@ -55,7 +55,7 @@ def test_deepseek_client_wraps_timeout_as_llm_generation_error(monkeypatch):
         def post(self, url, json, headers):
             raise httpx.TimeoutException("timeout")
 
-    import app.rag.llm as llm
+    import app.rag.generation.llm as llm
 
     monkeypatch.setattr(llm.httpx, "Client", FakeHttpClient)
     client = DeepSeekClient(api_key="test", base_url="https://example.com", model="deepseek-v4-flash")

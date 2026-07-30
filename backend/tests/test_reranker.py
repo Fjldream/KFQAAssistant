@@ -1,6 +1,6 @@
 from app.rag.models import DocumentChunk
-from app.rag.reranker import explain_rerank, rerank
-from app.rag.retriever import RetrievedChunk
+from app.rag.retrieval.reranker import explain_rerank, rerank
+from app.rag.retrieval.retriever import RetrievedChunk
 
 
 def test_rerank_prefers_workflow_steps_over_management_overview():

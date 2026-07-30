@@ -2,7 +2,7 @@ import argparse
 
 from app.core.config import get_settings
 from app.rag.factory import create_vector_store
-from app.rag.index_service import update_index
+from app.rag.ingestion.index_service import update_index
 
 
 # 解析索引构建参数，默认增量更新，传入 --full 时强制全量重建。

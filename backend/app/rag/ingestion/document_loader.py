@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from app.rag.image_resolver import mark_html_images, mark_markdown_images, resolve_image_path
+from app.rag.ingestion.image_resolver import mark_html_images, mark_markdown_images, resolve_image_path
 from app.rag.models import ManualDocument
-from app.rag.text_cleaner import clean_html, clean_markdown
+from app.rag.ingestion.text_cleaner import clean_html, clean_markdown
 
 
 # 根据文件路径生成文档标题，保留目录层级作为检索上下文。

@@ -2,11 +2,11 @@ import argparse
 
 from app.core.config import get_settings
 from app.rag.factory import create_vector_store
-from app.rag.multi_query import merge_retrieved_candidates
-from app.rag.query_rewriter import DeepSeekQueryRewriter, QueryRewriterProtocol
-from app.rag.reranker import explain_rerank, rerank
-from app.rag.retriever import RetrievedChunk
-from app.rag.vector_store import combined_score, keyword_score
+from app.rag.retrieval.multi_query import merge_retrieved_candidates
+from app.rag.retrieval.query_rewriter import DeepSeekQueryRewriter, QueryRewriterProtocol
+from app.rag.retrieval.reranker import explain_rerank, rerank
+from app.rag.retrieval.retriever import RetrievedChunk
+from app.rag.retrieval.vector_store import combined_score, keyword_score
 
 
 # 截取片段预览，避免调试输出被长文本淹没。

@@ -1,5 +1,5 @@
 from app.rag.models import ManualDocument
-from app.rag.splitter import split_documents
+from app.rag.ingestion.splitter import split_documents
 
 
 def test_splitter_preserves_metadata_and_images():

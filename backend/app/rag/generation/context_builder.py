@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.rag.retriever import RetrievedChunk
+from app.rag.retrieval.retriever import RetrievedChunk
 
 
 @dataclass(frozen=True)

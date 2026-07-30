@@ -1,6 +1,6 @@
-from app.rag.image_resolver import IMAGE_MARKER_PATTERN
+from app.rag.ingestion.image_resolver import IMAGE_MARKER_PATTERN
 from app.rag.models import DocumentChunk, ManualDocument
-from app.rag.text_cleaner import normalize_blank_lines
+from app.rag.ingestion.text_cleaner import normalize_blank_lines
 
 
 DEFAULT_CHUNK_SIZE = 700

@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api.dependencies import verify_api_key
 from app.core.config import get_settings
 from app.rag.factory import clear_rag_factory_cache, create_vector_store
-from app.rag.index_manifest import ManifestFormatError, load_manifest
-from app.rag.index_service import (
+from app.rag.ingestion.index_manifest import ManifestFormatError, load_manifest
+from app.rag.ingestion.index_service import (
     IndexSourceError,
     build_index_signature,
     is_rebuild_pending,

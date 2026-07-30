@@ -5,8 +5,8 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
 from app.rag.models import DocumentChunk
-from app.rag.retriever import RetrievedChunk
-from app.rag.retrieval_rules import expand_terms_with_rules, workflow_intent_score
+from app.rag.retrieval.retriever import RetrievedChunk
+from app.rag.retrieval.retrieval_rules import expand_terms_with_rules, workflow_intent_score
 
 
 KEYWORD_SCORE_WEIGHT = 0.08

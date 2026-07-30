@@ -133,7 +133,7 @@ def test_index_status_endpoint_reports_vector_store_count(monkeypatch):
             return 12
 
     import app.api.routes_index as routes_index
-    from app.rag.index_manifest import IndexManifest, ManifestEntry
+    from app.rag.ingestion.index_manifest import IndexManifest, ManifestEntry
 
     manifest_path = Path("storage/processed/test_manifest.json")
     monkeypatch.setattr(
@@ -228,7 +228,7 @@ def test_index_status_endpoint_reports_stale_configuration(monkeypatch):
             return 12
 
     import app.api.routes_index as routes_index
-    from app.rag.index_manifest import IndexManifest
+    from app.rag.ingestion.index_manifest import IndexManifest
 
     monkeypatch.setattr(
         routes_index,
@@ -266,7 +266,7 @@ def test_index_status_endpoint_reports_rebuild_required(monkeypatch):
             return 3
 
     import app.api.routes_index as routes_index
-    from app.rag.index_manifest import IndexManifest
+    from app.rag.ingestion.index_manifest import IndexManifest
 
     monkeypatch.setattr(
         routes_index,
@@ -304,7 +304,7 @@ def test_index_status_endpoint_reports_manifest_error(monkeypatch):
             return 12
 
     import app.api.routes_index as routes_index
-    from app.rag.index_manifest import ManifestFormatError
+    from app.rag.ingestion.index_manifest import ManifestFormatError
 
     monkeypatch.setattr(
         routes_index,
@@ -446,7 +446,7 @@ def test_rebuild_index_rejects_concurrent_request():
 # 验证手册目录异常会返回明确 503，并在异常后释放索引锁。
 def test_rebuild_index_returns_service_unavailable_for_source_error(monkeypatch):
     import app.api.routes_index as routes_index
-    from app.rag.index_service import IndexSourceError
+    from app.rag.ingestion.index_service import IndexSourceError
 
     monkeypatch.setattr(
         routes_index,

@@ -1,9 +1,9 @@
 import re
 from typing import Protocol
 
-from app.rag.answer_policy import NO_ANSWER_MESSAGE, is_missing_required_terms, is_no_answer, normalize_answer
-from app.rag.context_builder import build_context_blocks, format_context_blocks
-from app.rag.retriever import RetrievedChunk
+from app.rag.generation.answer_policy import NO_ANSWER_MESSAGE, is_missing_required_terms, is_no_answer, normalize_answer
+from app.rag.generation.context_builder import build_context_blocks, format_context_blocks
+from app.rag.retrieval.retriever import RetrievedChunk
 from app.schemas.chat import ChatResponse, SourceSnippet
 
 
