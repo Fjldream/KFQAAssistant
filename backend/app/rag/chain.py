@@ -2,6 +2,7 @@ import re
 from typing import Protocol
 
 from app.rag.answer_policy import NO_ANSWER_MESSAGE, is_missing_required_terms, is_no_answer, normalize_answer
+from app.rag.context_builder import build_context_blocks, format_context_blocks
 from app.rag.retriever import RetrievedChunk
 from app.schemas.chat import ChatResponse, SourceSnippet
 
@@ -63,16 +64,7 @@ def _build_sources(
 
 # 将检索片段格式化为带标题和来源的证据块，帮助大模型理解每段资料的出处。
 def _build_contexts(retrieved: list[RetrievedChunk]) -> list[str]:
-    contexts: list[str] = []
-    for index, item in enumerate(retrieved, start=1):
-        chunk = item.chunk
-        contexts.append(
-            f"[资料 {index}]\n"
-            f"标题：{chunk.title}\n"
-            f"来源：{chunk.source_path}\n"
-            f"内容：\n{chunk.content}"
-        )
-    return contexts
+    return format_context_blocks(build_context_blocks(retrieved))
 
 
 # 确保有效回答至少带有资料编号引用，避免模型忘记按 prompt 输出引用。
