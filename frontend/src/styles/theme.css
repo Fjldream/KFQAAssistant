@@ -682,13 +682,34 @@ textarea:disabled {
 }
 
 .ki-image-thumb {
+  display: grid;
+  gap: 8px;
   min-height: 54px;
   padding: 11px;
   background: #ffffff;
+  color: var(--ki-text);
+  text-align: left;
   transition:
     border-color 160ms ease,
     transform 160ms ease,
     box-shadow 160ms ease;
+}
+
+.ki-image-thumb img {
+  width: 100%;
+  height: 132px;
+  border-radius: 6px;
+  background: #edf3f5;
+  object-fit: contain;
+}
+
+.ki-image-thumb span {
+  overflow: hidden;
+  color: var(--ki-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ki-image-thumb:hover {
@@ -711,9 +732,10 @@ textarea:disabled {
 }
 
 .ki-material-backdrop {
-  align-items: stretch;
+  align-items: center;
   background: rgb(17 27 36 / 54%);
   backdrop-filter: blur(8px);
+  padding: 28px;
 }
 
 .ki-dialog {
@@ -725,14 +747,18 @@ textarea:disabled {
 .ki-material-dialog {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  width: min(920px, 100%);
-  max-height: min(760px, calc(100vh - 40px));
+  width: min(1180px, calc(100vw - 56px));
+  max-height: calc(100vh - 56px);
   margin: auto;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 68%);
   border-radius: 18px;
   background: #ffffff;
   box-shadow: var(--ki-shadow);
+}
+
+.ki-material-dialog--page {
+  min-height: min(760px, calc(100vh - 56px));
 }
 
 .ki-material-header {
@@ -765,9 +791,13 @@ textarea:disabled {
 .ki-material-section {
   margin: 0 0 18px;
   border: 1px solid var(--ki-border);
-  border-radius: 14px;
+  border-radius: 8px;
   background: #ffffff;
-  padding: 18px;
+  padding: 20px;
+}
+
+.ki-material-section--main {
+  min-height: 260px;
 }
 
 .ki-material-label {

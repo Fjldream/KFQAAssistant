@@ -29,9 +29,7 @@
       <EvidencePanel
         :sources="currentSources"
         :selected-source="chat.selectedSource.value"
-        :api-base-url="settings.settings.value.apiBaseUrl"
-        @select-source="chat.selectSource"
-        @preview-image="previewImage = $event"
+        @open-material="openMaterial"
       />
     </template>
   </AppShell>
@@ -45,6 +43,13 @@
     @reset="settings.resetSettings"
   />
 
+  <MaterialReader
+    :source="materialSource"
+    :api-base-url="settings.settings.value.apiBaseUrl"
+    @close="materialSource = null"
+    @preview-image="previewImage = $event"
+  />
+
   <ImagePreview :image="previewImage" @close="previewImage = null" />
 </template>
 
@@ -56,6 +61,7 @@ import ChatWorkspace from "./components/ChatWorkspace.vue";
 import EvidencePanel from "./components/EvidencePanel.vue";
 import ImagePreview from "./components/ImagePreview.vue";
 import LeftSidebar from "./components/LeftSidebar.vue";
+import MaterialReader from "./components/MaterialReader.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
 import { useChat } from "./composables/useChat";
 import { useIndexStatus } from "./composables/useIndexStatus";
@@ -75,6 +81,7 @@ const chat = useChat(settings.settings);
 const indexStatus = useIndexStatus(settings.settings);
 const settingsOpen = ref(false);
 const previewImage = ref<string | null>(null);
+const materialSource = ref<SourceSnippet | null>(null);
 
 const healthLabel = computed(() => {
   if (indexStatus.isLoading.value) {
@@ -117,6 +124,12 @@ function handleSaveSettings(nextSettings: ApiSettings): void {
   settings.updateSettings(nextSettings);
   settingsOpen.value = false;
   void indexStatus.refresh();
+}
+
+// 打开整页资料阅读器，并同步当前选中的资料片段。
+function openMaterial(source: SourceSnippet): void {
+  chat.selectSource(source);
+  materialSource.value = source;
 }
 
 onMounted(() => {

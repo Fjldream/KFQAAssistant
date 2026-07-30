@@ -27,77 +27,23 @@
     </div>
   </section>
 
-  <div v-if="activeMaterial" class="ki-material-backdrop" role="presentation" @click.self="closeMaterial">
-    <article class="ki-material-dialog" role="dialog" aria-modal="true" aria-labelledby="material-title">
-      <header class="ki-material-header">
-        <div>
-          <p class="ki-section-title">帮助手册资料</p>
-          <h2 id="material-title">{{ activeMaterial.title }}</h2>
-          <span class="ki-source-index">{{ activeMaterial.evidence_ids.join("、") || "资料" }}</span>
-        </div>
-        <button class="ki-icon-button" type="button" title="关闭资料" @click="closeMaterial">
-          <X :size="18" aria-hidden="true" />
-        </button>
-      </header>
-
-      <div class="ki-material-body">
-        <section class="ki-material-section">
-          <p class="ki-material-label">来源路径</p>
-          <p class="ki-path-text">{{ activeMaterial.source_path }}</p>
-        </section>
-
-        <section class="ki-material-section">
-          <p class="ki-material-label">命中段落</p>
-          <div class="ki-material-paragraph">{{ activeMaterial.snippet }}</div>
-        </section>
-
-        <section v-if="activeMaterial.images.length" class="ki-material-section">
-          <p class="ki-material-label">相关图片</p>
-          <div class="ki-material-image-grid">
-            <button
-              v-for="image in activeMaterial.images"
-              :key="image"
-              class="ki-image-thumb"
-              type="button"
-              @click="emit('previewImage', imageUrl(image))"
-            >
-              <span>{{ image.split('/').pop() }}</span>
-            </button>
-          </div>
-        </section>
-      </div>
-    </article>
-  </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
-import { X } from "lucide-vue-next";
-import { resolveImageUrl } from "../api/client";
 import type { SourceSnippet } from "../api/types";
 
-const props = defineProps<{
+defineProps<{
   sources: SourceSnippet[];
   selectedSource: SourceSnippet | null;
-  apiBaseUrl: string;
 }>();
 
 const emit = defineEmits<{
-  selectSource: [source: SourceSnippet];
-  previewImage: [image: string];
+  openMaterial: [source: SourceSnippet];
 }>();
 
-const activeMaterial = ref<SourceSnippet | null>(null);
-
-// 打开资料阅读弹窗，并同步选中右侧资料条目。
+// 通知顶层应用打开资料阅读器，避免弹窗被右侧资料栏的布局限制。
 function openMaterial(source: SourceSnippet): void {
-  activeMaterial.value = source;
-  emit("selectSource", source);
-}
-
-// 关闭资料阅读弹窗，保留右侧当前选中资料状态。
-function closeMaterial(): void {
-  activeMaterial.value = null;
+  emit("openMaterial", source);
 }
 
 // 格式化来源分数，后端没有返回分数时显示默认文案。
@@ -106,10 +52,5 @@ function formatScore(score: number | null): string {
     return "无分数";
   }
   return `相似度 ${(score * 100).toFixed(0)}%`;
-}
-
-// 将来源图片路径转换为浏览器可访问地址。
-function imageUrl(image: string): string {
-  return resolveImageUrl(props.apiBaseUrl, image);
 }
 </script>
