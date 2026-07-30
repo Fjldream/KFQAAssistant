@@ -87,7 +87,7 @@ const healthLabel = computed(() => {
   if (indexStatus.isLoading.value) {
     return "正在检查";
   }
-  return indexStatus.health.value?.status === "ok" ? "后端在线" : "后端未连接";
+  return indexStatus.health.value?.status === "ok" ? "助手在线" : "后端未连接";
 });
 
 const indexLabel = computed(() => {

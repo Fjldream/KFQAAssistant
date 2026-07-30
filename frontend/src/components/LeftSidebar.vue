@@ -59,17 +59,18 @@
         <button class="ki-text-button" type="button" @click="emit('clearHistory')">清空</button>
       </div>
       <p v-if="recentQuestions.length === 0" class="ki-empty-text">暂无最近问题</p>
-      <button
-        v-for="question in recentQuestions"
-        v-else
-        :key="question"
-        class="ki-question-button"
-        type="button"
-        @click="emit('ask', question)"
-      >
-        <span>{{ question }}</span>
-        <span aria-hidden="true">↗</span>
-      </button>
+      <div v-else class="ki-recent-list" data-testid="recent-list">
+        <button
+          v-for="question in recentQuestions"
+          :key="question"
+          class="ki-question-button"
+          type="button"
+          @click="emit('ask', question)"
+        >
+          <span>{{ question }}</span>
+          <span aria-hidden="true">↗</span>
+        </button>
+      </div>
     </section>
   </div>
 </template>
