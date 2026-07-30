@@ -29,7 +29,8 @@ html,
 body,
 #app {
   min-width: 320px;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 body {
@@ -57,13 +58,16 @@ textarea:disabled {
 .ki-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr) 360px;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: var(--ki-bg);
 }
 
 .ki-layout__sidebar,
 .ki-layout__evidence {
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background: var(--ki-surface);
 }
 
@@ -74,6 +78,8 @@ textarea:disabled {
 .ki-layout__main {
   position: relative;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   padding: 24px;
 }
 
@@ -89,7 +95,9 @@ textarea:disabled {
 .ki-sidebar-panel,
 .ki-evidence-panel,
 .ki-chat-workspace {
-  min-height: 100vh;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .ki-sidebar-panel,
@@ -284,7 +292,6 @@ textarea:disabled {
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 16px;
   max-width: 980px;
-  height: calc(100vh - 48px);
   margin: 0 auto;
 }
 
@@ -639,8 +646,8 @@ textarea:disabled {
   }
 
   .ki-chat-workspace {
-    height: auto;
-    min-height: calc(100vh - 32px);
+    height: 100%;
+    min-height: 0;
   }
 
   .ki-message--user,
