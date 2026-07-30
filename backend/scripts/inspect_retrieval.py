@@ -4,6 +4,7 @@ from app.core.config import get_settings
 from app.rag.factory import create_vector_store
 from app.rag.multi_query import merge_retrieved_candidates
 from app.rag.query_rewriter import DeepSeekQueryRewriter, QueryRewriterProtocol
+from app.rag.reranker import explain_rerank, rerank
 from app.rag.retriever import RetrievedChunk
 from app.rag.vector_store import combined_score, keyword_score
 
@@ -35,6 +36,7 @@ def format_retrieval_results(
                 f"  向量分: {vector_score:.2f}",
                 f"  关键词分: {keyword:.2f}",
                 f"  综合分: {combined_score(query, item):.2f}",
+                f"  重排原因: {', '.join(explain_rerank(query, item)) or '无'}",
                 f"  标题: {chunk.title}",
                 f"  来源: {chunk.source_path}",
                 f"  图片: {', '.join(chunk.images) or '无'}",
@@ -66,14 +68,16 @@ def inspect_retrieval(question: str, top_k: int, rewrite_enabled: bool = True) -
     vector_store = create_vector_store()
     query_rewriter = _create_query_rewriter(rewrite_enabled)
     if query_rewriter is None:
-        return vector_store.similarity_search(question, top_k), None
+        candidates = vector_store.similarity_search(question, top_k)
+        return rerank(question, candidates, top_k), None
 
     rewrite_result = query_rewriter.rewrite(question)
     results_by_query = {
         rewritten_query: vector_store.similarity_search(rewritten_query, top_k)
         for rewritten_query in rewrite_result.queries
     }
-    return merge_retrieved_candidates(results_by_query, limit=max(top_k * len(rewrite_result.queries), top_k))[:top_k], rewrite_result.queries
+    candidates = merge_retrieved_candidates(results_by_query, limit=max(top_k * len(rewrite_result.queries), top_k))
+    return rerank(question, candidates, top_k), rewrite_result.queries
 
 
 # 命令行入口：只运行检索，不调用大模型，用于定位 RAG 是否先找对了资料。

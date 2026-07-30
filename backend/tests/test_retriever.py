@@ -76,6 +76,17 @@ class FakeMultiQueryVectorStore:
         ]
 
 
+class FakeReranker:
+    # 记录重排输入，并故意反转结果，验证 Retriever 会调用重排序器。
+    def __init__(self):
+        self.called_with_query = ""
+
+    # 模拟重排序器接口，返回反转后的候选资料。
+    def __call__(self, query: str, candidates: list[RetrievedChunk], limit: int):
+        self.called_with_query = query
+        return list(reversed(candidates))[:limit]
+
+
 def test_retriever_returns_ranked_chunks():
     service = RetrieverService(vector_store=FakeVectorStore(), top_k=5)
 
@@ -93,6 +104,22 @@ def test_retriever_uses_rewritten_queries_when_rewriter_is_enabled():
 
     assert vector_store.queries == ["如何创建采集工程，如何运行它呢？", "如何在运维中心部署并启动采集工程？"]
     assert [item.chunk.id for item in results] == ["run::0", "create::0"]
+
+
+def test_retriever_calls_optional_reranker():
+    vector_store = FakeMultiQueryVectorStore()
+    reranker = FakeReranker()
+    service = RetrieverService(
+        vector_store=vector_store,
+        top_k=5,
+        query_rewriter=FakeRewriter(),
+        reranker=reranker,
+    )
+
+    results = service.retrieve("如何创建采集工程，如何运行它呢？")
+
+    assert reranker.called_with_query == "如何创建采集工程，如何运行它呢？"
+    assert [item.chunk.id for item in results] == ["create::0", "run::0"]
 
 
 # 验证索引为空时检索层主动中断，避免后续返回误导性的“没有答案”。
