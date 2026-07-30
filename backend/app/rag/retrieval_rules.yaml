@@ -1,0 +1,16 @@
+term_groups:
+  - triggers: ["操作系统"]
+    terms: ["系统环境", "软件要求", "Windows", "Linux", "Chrome"]
+  - triggers: ["启动", "运行"]
+    required_any: ["工程"]
+    terms: ["发布", "部署", "启动", "运维中心", "运行节点", "添加端口"]
+  - triggers: ["数据组态工程", "数据源工程"]
+    terms: ["数据组态工程的启动", "数据组态工程的创建", "数据APP组态", "数据源接口APP"]
+  - triggers: ["采集工程", "数采工程"]
+    terms: ["数采工程", "数采管理", "驱动", "设备", "变量", "发布工程", "部署启动"]
+workflow:
+  triggers: ["启动", "运行"]
+  required_any: ["工程"]
+  terms: ["发布", "运维中心", "运行的节点", "添加端口", "部署", "启动"]
+  min_matches: 3
+  score_per_match: 2

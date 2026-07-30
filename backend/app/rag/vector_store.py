@@ -6,6 +6,7 @@ from langchain_core.documents import Document
 
 from app.rag.models import DocumentChunk
 from app.rag.retriever import RetrievedChunk
+from app.rag.retrieval_rules import expand_terms_with_rules, workflow_intent_score
 
 
 KEYWORD_SCORE_WEIGHT = 0.08
@@ -20,14 +21,7 @@ def expand_query_terms(query: str) -> list[str]:
         expanded.append(term)
         if re.fullmatch(r"[\u4e00-\u9fff]+", term) and len(term) > 1:
             expanded.extend(term[index : index + 2] for index in range(len(term) - 1))
-    if "操作系统" in query:
-        expanded.extend(["系统环境", "软件要求", "Windows", "Linux", "Chrome"])
-    if any(word in query for word in ["启动", "运行"]) and "工程" in query:
-        expanded.extend(["发布", "部署", "启动", "运维中心", "运行节点", "添加端口"])
-    if "数据组态工程" in query or "数据源工程" in query:
-        expanded.extend(["数据组态工程的启动", "数据组态工程的创建", "数据APP组态", "数据源接口APP"])
-    if "采集工程" in query or "数采工程" in query:
-        expanded.extend(["数采工程", "数采管理", "驱动", "设备", "变量", "发布工程", "部署启动"])
+    expanded.extend(expand_terms_with_rules(query))
     return list(dict.fromkeys(item for item in expanded if len(item) >= 2))
 
 
@@ -44,18 +38,6 @@ def keyword_score(query: str, chunk: DocumentChunk) -> float:
             score += 1.0
     score += workflow_intent_score(query, text)
     return score
-
-
-# 针对“启动/运行工程”问题，提升包含发布、运维中心、部署、启动等完整流程证据的片段。
-def workflow_intent_score(query: str, text: str) -> float:
-    if not (any(word in query for word in ["启动", "运行"]) and "工程" in query):
-        return 0.0
-
-    workflow_terms = ["发布", "运维中心", "运行的节点", "添加端口", "部署", "启动"]
-    matched_count = sum(1 for term in workflow_terms if term in text)
-    if matched_count < 3:
-        return 0.0
-    return float(matched_count * 2)
 
 
 # 计算最终排序分：向量相关性分加上加权后的关键词匹配分。
