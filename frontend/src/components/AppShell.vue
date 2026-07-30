@@ -11,7 +11,7 @@
       <slot></slot>
     </main>
 
-    <aside class="ki-layout__evidence" aria-label="证据与图片">
+    <aside class="ki-layout__evidence" aria-label="资料与图片">
       <slot name="evidence"></slot>
     </aside>
   </div>
