@@ -71,6 +71,79 @@ def test_keyword_score_boosts_system_environment_document():
     assert keyword_score(query, correct) > keyword_score(query, wrong)
 
 
+# 验证工程运行类问题会优先命中包含发布、部署、启动流程的教程片段。
+def test_keyword_score_boosts_project_start_workflow_document():
+    correct = DocumentChunk(
+        id="tutorial::0",
+        title="教程/5分钟完成KingScada数据接入KF3.6平台/实时数据采集到界面展示",
+        source_path="教程/5分钟完成KingScada数据接入KF3.6平台/实时数据采集到界面展示.html",
+        content=(
+            "数据源名称：自定义。工程名称：KingSCADA中创建的工程的名称。"
+            "选择刚才创建的工程，点击发布。2.2.2 数据组态工程的启动。"
+            "打开运维中心，在运行的节点下面点击添加，添加端口，对添加好的 APP 依次执行部署、启动操作。"
+        ),
+    )
+    wrong = DocumentChunk(
+        id="intro::0",
+        title="客户端APP组态/功能模块/工程配置/数据源管理/简介",
+        source_path="客户端APP组态/功能模块/工程配置/数据源管理/简介.html",
+        content=(
+            "客户端模块的数据源是通过数据源组态中的数据源，连接到开发态的数据接口服务工程配置和管理的服务中，"
+            "通过数据接口服务工程运行实例名称和对应的数据源名称，从数据接口服务中的工程库中获取数据信息。"
+        ),
+    )
+
+    query = "如何启动数据组态工程？"
+
+    assert keyword_score(query, correct) > keyword_score(query, wrong)
+
+
+def test_combined_score_prefers_complete_project_start_workflow():
+    workflow = DocumentChunk(
+        id="workflow::0",
+        title="教程/数据组态工程的创建与启动",
+        source_path="教程/5分钟完成KingScada数据接入KF3.6平台/历史数据采集到界面展示.html",
+        content=(
+            "选择刚才创建的工程，点击发布。3.2.2 数据组态工程的启动。"
+            "打开运维中心，在运行的节点下面点击添加，添加端口，对添加好的 APP 依次执行部署、启动操作。"
+        ),
+    )
+    management = DocumentChunk(
+        id="management::0",
+        title="数据APP组态/工程管理",
+        source_path="数据APP组态/工程管理.html",
+        content="数据源工程管理包括新建、编辑、删除、导入、导出、编辑共享、发布、更新和撤销发布工程。",
+    )
+
+    query = "如何启动数据组态工程？"
+
+    assert combined_score(query, RetrievedChunk(workflow, 0.42)) > combined_score(query, RetrievedChunk(management, 0.52))
+
+
+def test_keyword_score_prefers_real_manual_start_workflow_over_management_overview():
+    workflow = DocumentChunk(
+        id="real-workflow::0",
+        title="教程/5分钟完成KingScada数据接入KF3.6平台/3分钟完成KingScada历史数据采集到界面展示",
+        source_path="教程/5分钟完成KingScada数据接入KF3.6平台/3分钟完成KingScada历史数据采集到界面展示.html",
+        content=(
+            "工程名称：KingSCADA中创建的工程的名称。连接名称：自定义，必填项。"
+            "选择刚才创建的工程，点击发布。3.2.2 数据组态工程的启动。"
+            "打开运维中心，在运行的节点下面点击添加，添加端口，点击提交。"
+            "对添加好的 APP 依次执行部署、启动操作。"
+        ),
+    )
+    management = DocumentChunk(
+        id="management::0",
+        title="数据APP组态/工程管理/工程管理",
+        source_path="数据APP组态/工程管理/工程管理.html",
+        content="数据源工程管理包括新建、编辑、删除、导入、导出、编辑共享、发布、更新和撤销发布工程。点击新建工程按钮。",
+    )
+
+    query = "如何启动数据组态工程？"
+
+    assert keyword_score(query, workflow) > keyword_score(query, management)
+
+
 def test_combined_score_adds_vector_score_and_weighted_keyword_score():
     chunk = DocumentChunk(
         id="doc::0",

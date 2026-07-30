@@ -40,5 +40,12 @@
     "expected_source_keywords": ["数采管理/工程开发-Windows"],
     "expect_images": false,
     "expect_no_answer": false
+  },
+  {
+    "question": "如何启动数据组态工程？",
+    "expected_keywords": ["运维中心", "部署", "启动"],
+    "expected_source_keywords": ["教程/5分钟完成KingScada数据接入KF3.6平台"],
+    "expect_images": true,
+    "expect_no_answer": false
   }
 ]
