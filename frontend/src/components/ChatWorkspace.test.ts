@@ -20,6 +20,22 @@ describe("ChatWorkspace", () => {
     expect(wrapper.emitted("ask")?.[0]).toEqual(["如何创建采集工程？"]);
   });
 
+  it("does not submit while the input method is composing text", async () => {
+    const wrapper = mount(ChatWorkspace, {
+      props: {
+        messages: [],
+        isAsking: false,
+        errorMessage: null,
+      },
+    });
+
+    const input = wrapper.get("textarea");
+    await input.setValue("chuangjian");
+    await input.trigger("keydown", { key: "Enter", isComposing: true });
+
+    expect(wrapper.emitted("ask")).toBeUndefined();
+  });
+
   it("renders assistant markdown and source chips", () => {
     const messages: ChatMessage[] = [
       {

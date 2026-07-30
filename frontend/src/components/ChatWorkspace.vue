@@ -132,7 +132,7 @@ function submitQuestion(): void {
 
 // 处理输入框回车：Enter 发送，Shift+Enter 保留换行。
 function handleEnter(event: KeyboardEvent): void {
-  if (event.shiftKey) {
+  if (event.shiftKey || event.isComposing || event.keyCode === 229) {
     return;
   }
   event.preventDefault();
