@@ -8,6 +8,8 @@ WORKFLOW_QUERY_TERMS = ("如何", "怎么", "步骤", "启动", "运行", "创�
 WORKFLOW_EVIDENCE_TERMS = ("发布", "运维中心", "运行的节点", "添加端口", "部署", "启动")
 PATH_BONUS_TERMS = ("教程", "工程开发", "操作流程", "新手指引")
 VISUAL_QUERY_TERMS = ("图片", "截图", "界面", "按钮", "页面", "在哪里", "在哪")
+ENVIRONMENT_QUERY_TERMS = ("操作系统", "系统要求", "环境要求", "软件要求", "硬件要求")
+ENVIRONMENT_EVIDENCE_TERMS = ("系统环境", "系统环境要求", "软件要求", "硬件要求", "Windows", "Linux", "Chrome")
 
 
 @dataclass(frozen=True)
@@ -19,6 +21,11 @@ class RerankReason:
 # 判断用户问题是否更像操作流程类问题。
 def _is_workflow_query(query: str) -> bool:
     return any(term in query for term in WORKFLOW_QUERY_TERMS) and "工程" in query
+
+
+# 判断用户问题是否在询问系统环境、操作系统或软硬件要求。
+def _is_environment_query(query: str) -> bool:
+    return any(term in query for term in ENVIRONMENT_QUERY_TERMS)
 
 
 # 从中文问题中抽取短实体词，用于判断候选资料是否覆盖用户问到的对象。
@@ -46,6 +53,10 @@ def _score_reasons(query: str, candidate: RetrievedChunk) -> list[RerankReason]:
 
     if any(term in title_source for term in PATH_BONUS_TERMS):
         reasons.append(RerankReason("来源属于教程或工程开发章节", 0.18))
+
+    environment_matches = [term for term in ENVIRONMENT_EVIDENCE_TERMS if term in text]
+    if _is_environment_query(query) and len(environment_matches) >= 2:
+        reasons.append(RerankReason("包含系统环境要求信号", 0.35))
 
     query_terms = _extract_query_terms(query)
     if query_terms and any(term in text for term in query_terms):

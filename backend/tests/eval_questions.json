@@ -42,10 +42,23 @@
     "expect_no_answer": false
   },
   {
+    "question": "如何创建采集工程，如何运行它？",
+    "expected_keywords": ["新建工程", "发布", "运维中心", "部署", "启动"],
+    "expected_source_keywords": ["数采管理"],
+    "forbidden_source_keywords": ["数据APP组态/工程管理/工程管理"],
+    "expect_images": true,
+    "min_sources": 2,
+    "min_images": 1,
+    "expect_no_answer": false
+  },
+  {
     "question": "如何启动数据组态工程？",
     "expected_keywords": ["运维中心", "部署", "启动"],
     "expected_source_keywords": ["教程/5分钟完成KingScada数据接入KF3.6平台"],
+    "forbidden_source_keywords": ["数据APP组态/工程管理/工程管理"],
     "expect_images": true,
+    "min_sources": 1,
+    "min_images": 1,
     "expect_no_answer": false
   }
 ]

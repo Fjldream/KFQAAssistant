@@ -24,6 +24,42 @@ class FakeChain:
         )
 
 
+class WorkflowChain:
+    # 模拟流程类问题的合格回答，用来验证质量门禁规则。
+    def answer(self, question: str) -> ChatResponse:
+        return ChatResponse(
+            answer="先新建工程，再发布，到运维中心部署并启动。",
+            sources=[
+                SourceSnippet(
+                    title="教程/数据组态工程的启动",
+                    source_path="教程/KingScada数据接入.html",
+                    snippet="打开运维中心，添加端口，部署并启动。",
+                    evidence_ids=["资料 1"],
+                    images=["教程/1.png"],
+                    score=0.9,
+                )
+            ],
+        )
+
+
+class ForbiddenSourceChain:
+    # 模拟命中错误来源的回答，用来验证禁止来源门禁会拦截。
+    def answer(self, question: str) -> ChatResponse:
+        return ChatResponse(
+            answer="打开运维中心部署并启动。",
+            sources=[
+                SourceSnippet(
+                    title="数据APP组态/工程管理",
+                    source_path="数据APP组态/工程管理/工程管理.html",
+                    snippet="工程管理包括新建、编辑、删除。",
+                    evidence_ids=["资料 1"],
+                    images=[],
+                    score=0.9,
+                )
+            ],
+        )
+
+
 def test_load_eval_questions_reads_json_file(tmp_path: Path):
     eval_file = tmp_path / "eval.json"
     eval_file.write_text(
@@ -33,7 +69,10 @@ def test_load_eval_questions_reads_json_file(tmp_path: Path):
                     "question": "页面编辑器主要包括哪些区域？",
                     "expected_keywords": ["菜单栏", "工具栏"],
                     "expected_source_keywords": ["页面编辑器/简介"],
+                    "forbidden_source_keywords": ["无关来源"],
                     "expect_images": True,
+                    "min_sources": 1,
+                    "min_images": 1,
                 }
             ],
             ensure_ascii=False,
@@ -46,7 +85,10 @@ def test_load_eval_questions_reads_json_file(tmp_path: Path):
     assert questions[0].question == "页面编辑器主要包括哪些区域？"
     assert questions[0].expected_keywords == ["菜单栏", "工具栏"]
     assert questions[0].expected_source_keywords == ["页面编辑器/简介"]
+    assert questions[0].forbidden_source_keywords == ["无关来源"]
     assert questions[0].expect_images is True
+    assert questions[0].min_sources == 1
+    assert questions[0].min_images == 1
     assert questions[0].expect_no_answer is False
 
 
@@ -67,6 +109,37 @@ def test_evaluate_question_checks_keywords_sources_and_images():
     assert result.missing_source_keywords == []
     assert result.image_count == 1
     assert result.sources[0] == "页面编辑器/简介.md"
+
+
+def test_evaluate_question_checks_min_images_and_forbidden_sources():
+    result = evaluate_question(
+        chain=WorkflowChain(),
+        question="如何启动数据组态工程？",
+        expected_keywords=["运维中心", "部署", "启动"],
+        expected_source_keywords=["教程"],
+        expect_images=True,
+        expect_no_answer=False,
+        forbidden_source_keywords=["工程管理/工程管理"],
+        min_sources=1,
+        min_images=1,
+    )
+
+    assert result.passed is True
+
+
+def test_evaluate_question_fails_when_forbidden_source_matches():
+    result = evaluate_question(
+        chain=ForbiddenSourceChain(),
+        question="如何启动数据组态工程？",
+        expected_keywords=["运维中心", "部署", "启动"],
+        expected_source_keywords=[],
+        expect_images=False,
+        expect_no_answer=False,
+        forbidden_source_keywords=["数据APP组态/工程管理/工程管理"],
+    )
+
+    assert result.passed is False
+    assert result.forbidden_source_matches == ["数据APP组态/工程管理/工程管理"]
 
 
 def test_evaluate_question_checks_expected_no_answer():

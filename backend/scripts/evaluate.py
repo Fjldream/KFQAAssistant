@@ -1,6 +1,6 @@
 import argparse
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
@@ -22,6 +22,9 @@ class EvalQuestion:
     expected_source_keywords: list[str]
     expect_images: bool = False
     expect_no_answer: bool = False
+    forbidden_source_keywords: list[str] = field(default_factory=list)
+    min_sources: int = 0
+    min_images: int = 0
 
 
 @dataclass(frozen=True)
@@ -32,7 +35,9 @@ class EvalResult:
     missing_keywords: list[str]
     matched_source_keywords: list[str]
     missing_source_keywords: list[str]
+    forbidden_source_matches: list[str]
     image_count: int
+    source_count: int
     no_answer_matched: bool
     sources: list[str]
     answer: str
@@ -48,6 +53,9 @@ def load_eval_questions(path: Path) -> list[EvalQuestion]:
             expected_source_keywords=[str(keyword) for keyword in item.get("expected_source_keywords", [])],
             expect_images=bool(item.get("expect_images", False)),
             expect_no_answer=bool(item.get("expect_no_answer", False)),
+            forbidden_source_keywords=[str(keyword) for keyword in item.get("forbidden_source_keywords", [])],
+            min_sources=int(item.get("min_sources", 0)),
+            min_images=int(item.get("min_images", 0)),
         )
         for item in raw_items
     ]
@@ -69,6 +77,12 @@ def _image_count(response: ChatResponse) -> int:
     return sum(len(source.images) for source in response.sources)
 
 
+# 判断图片数量是否达到显式门槛，兼容旧的 expect_images 布尔规则。
+def _image_requirement_matched(image_count: int, expect_images: bool, min_images: int) -> bool:
+    required_images = max(1 if expect_images else 0, min_images)
+    return image_count >= required_images
+
+
 # 评估单个问题：检查关键词、来源、图片和拒答行为是否符合预期。
 def evaluate_question(
     chain: ChainProtocol,
@@ -77,19 +91,33 @@ def evaluate_question(
     expected_source_keywords: list[str],
     expect_images: bool,
     expect_no_answer: bool,
+    forbidden_source_keywords: list[str] | None = None,
+    min_sources: int = 0,
+    min_images: int = 0,
 ) -> EvalResult:
+    forbidden_source_keywords = forbidden_source_keywords or []
     response = chain.answer(question)
     searchable_text = _searchable_text(response)
     source_text = _source_text(response)
     image_count = _image_count(response)
+    source_count = len(response.sources)
     actual_no_answer = is_no_answer(response.answer)
     matched_keywords = [keyword for keyword in expected_keywords if keyword in searchable_text]
     missing_keywords = [keyword for keyword in expected_keywords if keyword not in searchable_text]
     matched_source_keywords = [keyword for keyword in expected_source_keywords if keyword in source_text]
     missing_source_keywords = [keyword for keyword in expected_source_keywords if keyword not in source_text]
-    image_matched = image_count > 0 if expect_images else True
+    forbidden_source_matches = [keyword for keyword in forbidden_source_keywords if keyword in source_text]
+    image_matched = _image_requirement_matched(image_count, expect_images, min_images)
+    source_count_matched = source_count >= min_sources
     no_answer_matched = actual_no_answer is expect_no_answer
-    passed = not missing_keywords and not missing_source_keywords and image_matched and no_answer_matched
+    passed = (
+        not missing_keywords
+        and not missing_source_keywords
+        and not forbidden_source_matches
+        and image_matched
+        and source_count_matched
+        and no_answer_matched
+    )
     return EvalResult(
         question=question,
         passed=passed,
@@ -97,7 +125,9 @@ def evaluate_question(
         missing_keywords=missing_keywords,
         matched_source_keywords=matched_source_keywords,
         missing_source_keywords=missing_source_keywords,
+        forbidden_source_matches=forbidden_source_matches,
         image_count=image_count,
+        source_count=source_count,
         no_answer_matched=no_answer_matched,
         sources=[source.source_path for source in response.sources],
         answer=response.answer,
@@ -132,9 +162,10 @@ def print_report(results: list[EvalResult]) -> None:
         print(f"   缺失关键词: {', '.join(result.missing_keywords) or '无'}")
         print(f"   命中来源关键词: {', '.join(result.matched_source_keywords) or '无'}")
         print(f"   缺失来源关键词: {', '.join(result.missing_source_keywords) or '无'}")
+        print(f"   禁止来源命中: {', '.join(result.forbidden_source_matches) or '无'}")
         print(f"   拒答匹配: {'是' if result.no_answer_matched else '否'}")
         print(f"   图片数量: {result.image_count}")
-        print(f"   来源数量: {len(result.sources)}")
+        print(f"   来源数量: {result.source_count}")
         print(f"   来源: {', '.join(result.sources) or '无'}")
         print()
 
@@ -155,6 +186,9 @@ def main() -> None:
             expected_source_keywords=item.expected_source_keywords,
             expect_images=item.expect_images,
             expect_no_answer=item.expect_no_answer,
+            forbidden_source_keywords=item.forbidden_source_keywords,
+            min_sources=item.min_sources,
+            min_images=item.min_images,
         )
         for item in questions
     ]
