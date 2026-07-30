@@ -27,3 +27,15 @@ def test_format_retrieval_results_includes_rank_scores_sources_and_images():
     assert "页面编辑器/简介.md" in output
     assert "页面编辑器/1.png" in output
     assert "菜单栏" in output
+
+
+def test_format_retrieval_results_includes_rewritten_queries():
+    output = format_retrieval_results(
+        "如何创建采集工程？",
+        [],
+        rewritten_queries=["如何创建采集工程？", "如何在运维中心部署并启动采集工程？"],
+    )
+
+    assert "改写查询:" in output
+    assert "1. 如何创建采集工程？" in output
+    assert "2. 如何在运维中心部署并启动采集工程？" in output

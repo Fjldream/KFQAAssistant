@@ -3,6 +3,7 @@ from typing import Protocol
 
 from app.rag.errors import IndexNotReadyError
 from app.rag.models import DocumentChunk
+from app.rag.query_rewriter import QueryRewriterProtocol
 
 
 # 表示一次检索命中的 chunk，同时带有向量库返回的相关性分数。
@@ -25,13 +26,31 @@ class VectorStoreProtocol(Protocol):
 
 # RAG 检索服务：屏蔽具体向量库细节，对外只暴露 retrieve 方法。
 class RetrieverService:
-    # 注入向量库和 top_k 参数，方便测试时替换成假向量库。
-    def __init__(self, vector_store: VectorStoreProtocol, top_k: int = 5) -> None:
+    # 注入向量库、top_k 和可选查询改写器，方便测试时替换成假对象。
+    def __init__(
+        self,
+        vector_store: VectorStoreProtocol,
+        top_k: int = 5,
+        query_rewriter: QueryRewriterProtocol | None = None,
+        candidate_limit: int = 50,
+    ) -> None:
         self.vector_store = vector_store
         self.top_k = top_k
+        self.query_rewriter = query_rewriter
+        self.candidate_limit = candidate_limit
 
     # 根据用户问题调用向量库检索，返回带来源信息的相关 chunks。
     def retrieve(self, query: str) -> list[RetrievedChunk]:
         if self.vector_store.count() <= 0:
             raise IndexNotReadyError()
-        return self.vector_store.similarity_search(query, self.top_k)
+        if self.query_rewriter is None:
+            return self.vector_store.similarity_search(query, self.top_k)
+
+        from app.rag.multi_query import merge_retrieved_candidates
+
+        rewrite_result = self.query_rewriter.rewrite(query)
+        results_by_query = {
+            rewritten_query: self.vector_store.similarity_search(rewritten_query, self.top_k)
+            for rewritten_query in rewrite_result.queries
+        }
+        return merge_retrieved_candidates(results_by_query, self.candidate_limit)[: self.top_k]

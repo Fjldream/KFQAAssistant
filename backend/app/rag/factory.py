@@ -4,6 +4,7 @@ from app.core.config import get_settings
 from app.rag.chain import RagChain
 from app.rag.embeddings import LazyEmbeddings
 from app.rag.llm import DeepSeekClient
+from app.rag.query_rewriter import DeepSeekQueryRewriter
 from app.rag.retriever import RetrieverService
 from app.rag.vector_store import ChromaVectorStore
 
@@ -21,7 +22,23 @@ def create_vector_store() -> ChromaVectorStore:
 def create_rag_chain() -> RagChain:
     settings = get_settings()
     vector_store = create_vector_store()
-    retriever = RetrieverService(vector_store=vector_store, top_k=settings.top_k)
+    query_rewriter = (
+        DeepSeekQueryRewriter(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
+            model=settings.deepseek_model,
+            timeout_seconds=settings.deepseek_timeout_seconds,
+            max_queries=settings.query_rewrite_max_queries,
+        )
+        if settings.enable_query_rewrite
+        else None
+    )
+    retriever = RetrieverService(
+        vector_store=vector_store,
+        top_k=settings.top_k,
+        query_rewriter=query_rewriter,
+        candidate_limit=settings.multi_query_candidate_limit,
+    )
     llm = DeepSeekClient(
         api_key=settings.deepseek_api_key,
         base_url=settings.deepseek_base_url,

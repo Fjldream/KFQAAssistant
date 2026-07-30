@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     max_images_per_answer: int = 8
     enable_query_rewrite: bool = True
     query_rewrite_max_queries: int = 5
+    multi_query_candidate_limit: int = 50
 
     # 统一规范化运行数据路径，让本地、测试和容器入口共享同一套解析规则。
     @field_validator("chroma_persist_dir", "index_manifest_path", "data_dir", mode="after")

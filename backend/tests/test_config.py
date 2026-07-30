@@ -21,6 +21,7 @@ def test_settings_defaults_are_local_friendly():
     assert settings.max_images_per_answer == 8
     assert settings.enable_query_rewrite is True
     assert settings.query_rewrite_max_queries == 5
+    assert settings.multi_query_candidate_limit == 50
 
 
 def test_settings_resolves_relative_runtime_paths_from_repo_root():

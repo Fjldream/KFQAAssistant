@@ -31,6 +31,51 @@ class FakeEmptyVectorStore:
         raise AssertionError("空索引不应该继续执行相似度检索")
 
 
+class FakeRewriter:
+    # 返回原问题和一个运行类改写问题，模拟 Query Rewrite 输出。
+    def rewrite(self, question: str):
+        from app.rag.query_rewriter import QueryAnalysis, RewriteResult
+
+        return RewriteResult(
+            original_question=question,
+            queries=[question, "如何在运维中心部署并启动采集工程？"],
+            analysis=QueryAnalysis(
+                original_question=question,
+                intent="workflow",
+                entities=["采集工程"],
+                needs_images=False,
+                needs_steps=True,
+            ),
+        )
+
+
+class FakeMultiQueryVectorStore:
+    # 记录每次检索查询，并按查询内容返回不同片段。
+    def __init__(self):
+        self.queries = []
+
+    # 返回非空索引数量，让检索继续执行。
+    def count(self):
+        return 10
+
+    # 根据改写查询模拟创建片段和启动片段的多路召回。
+    def similarity_search(self, query: str, top_k: int):
+        self.queries.append(query)
+        if "启动" in query:
+            return [
+                RetrievedChunk(
+                    DocumentChunk(id="run::0", title="运行工程", source_path="运行工程.md", content="部署并启动。"),
+                    score=0.9,
+                )
+            ]
+        return [
+            RetrievedChunk(
+                DocumentChunk(id="create::0", title="创建工程", source_path="创建工程.md", content="点击新建工程。"),
+                score=0.8,
+            )
+        ]
+
+
 def test_retriever_returns_ranked_chunks():
     service = RetrieverService(vector_store=FakeVectorStore(), top_k=5)
 
@@ -38,6 +83,16 @@ def test_retriever_returns_ranked_chunks():
 
     assert results[0].score == 0.91
     assert results[0].chunk.images == ["页面编辑器/1.png"]
+
+
+def test_retriever_uses_rewritten_queries_when_rewriter_is_enabled():
+    vector_store = FakeMultiQueryVectorStore()
+    service = RetrieverService(vector_store=vector_store, top_k=5, query_rewriter=FakeRewriter())
+
+    results = service.retrieve("如何创建采集工程，如何运行它呢？")
+
+    assert vector_store.queries == ["如何创建采集工程，如何运行它呢？", "如何在运维中心部署并启动采集工程？"]
+    assert [item.chunk.id for item in results] == ["run::0", "create::0"]
 
 
 # 验证索引为空时检索层主动中断，避免后续返回误导性的“没有答案”。
