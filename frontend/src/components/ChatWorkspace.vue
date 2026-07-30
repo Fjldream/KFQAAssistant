@@ -3,16 +3,18 @@
     <header class="ki-chat-header">
       <div>
         <p class="ki-section-title">问答工作区</p>
-        <h1>产品使用问题</h1>
+        <h1>KingIAsk 产品知识助手</h1>
+        <span>基于 KF 产品手册回答操作、配置和排障问题</span>
       </div>
       <button class="ki-secondary-button" type="button" @click="emit('clear')">清空会话</button>
     </header>
 
     <div class="ki-message-list" aria-live="polite">
       <div v-if="messages.length === 0" class="ki-welcome-state">
+        <div class="ki-welcome-mark" aria-hidden="true">AI</div>
         <p class="ki-section-title">开始提问</p>
         <h2>询问 KF 产品手册中的操作问题</h2>
-        <p>回答会显示在这里，右侧会同步展示来源片段和相关图片。</p>
+        <p>回答会显示在这里，右侧同步展示来源片段和相关图片。</p>
       </div>
 
       <article
@@ -65,6 +67,10 @@
     <p v-if="errorMessage" class="ki-error-text">{{ errorMessage }}</p>
 
     <form class="ki-input-bar" @submit.prevent="submitQuestion">
+      <div class="ki-input-label">
+        <span>向 KingIAsk 提问</span>
+        <small>Enter 发送，Shift + Enter 换行</small>
+      </div>
       <textarea
         v-model="draft"
         rows="2"

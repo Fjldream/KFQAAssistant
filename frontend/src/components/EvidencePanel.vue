@@ -2,7 +2,8 @@
   <section class="ki-evidence-panel">
     <header>
       <p class="ki-section-title">证据与图片</p>
-      <h2>来源依据</h2>
+      <h2>证据中心</h2>
+      <span>{{ sources.length }} 个来源片段</span>
     </header>
 
     <div v-if="sources.length === 0" class="ki-empty-block">
@@ -19,13 +20,14 @@
         type="button"
         @click="emit('selectSource', source)"
       >
+        <span class="ki-source-index">{{ source.evidence_ids.join("、") || "资料" }}</span>
         <strong>{{ source.title }}</strong>
-        <span>{{ source.evidence_ids.join("、") || "资料" }}</span>
         <small>{{ formatScore(source.score) }}</small>
       </button>
     </div>
 
     <article v-if="selectedSource" class="ki-source-detail">
+      <span class="ki-source-index">{{ selectedSource.evidence_ids.join("、") || "资料" }}</span>
       <p class="ki-path-text">{{ selectedSource.source_path }}</p>
       <p>{{ selectedSource.snippet }}</p>
       <div v-if="selectedSource.images.length" class="ki-image-grid">
