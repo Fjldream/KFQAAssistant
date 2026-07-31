@@ -37,13 +37,26 @@ describe("createKingIAskWidget", () => {
     expect(host.shadowRoot?.textContent).toContain("欢迎使用助手");
   });
 
+  it("renders a branded launcher and dialog shell", () => {
+    createKingIAskWidget(config);
+
+    const host = document.querySelector("[data-kingiask-widget-root]") as HTMLElement;
+    const launcher = host.shadowRoot?.querySelector<HTMLButtonElement>("button[data-role='launcher']");
+    const panel = host.shadowRoot?.querySelector<HTMLElement>("[data-role='panel']");
+
+    expect(launcher?.getAttribute("aria-label")).toBe("打开 KingIAsk 助手");
+    expect(launcher?.textContent).toContain("KingIAsk");
+    expect(panel?.getAttribute("role")).toBe("dialog");
+    expect(panel?.getAttribute("aria-labelledby")).toBe("kiw-title");
+  });
+
   it("sends a question and renders answer sources and images", async () => {
     vi.spyOn(api, "askKingIAsk").mockResolvedValue({
       answer: "点击新建工程。",
       sources: [
         {
           title: "采集工程",
-          source_path: "html/数采管理/工程开发-Windows.md",
+          source_path: "helperFront/入门指南/2_从零搭建一个KF工程/2_数据采集配置.md",
           snippet: "点击新建工程。",
           evidence_ids: ["资料 1"],
           images: ["html/数采管理/1.png"],
@@ -63,6 +76,7 @@ describe("createKingIAskWidget", () => {
     await vi.waitFor(() => {
       expect(host.shadowRoot?.textContent).toContain("点击新建工程。");
       expect(host.shadowRoot?.textContent).toContain("采集工程");
+      expect(host.shadowRoot?.querySelector("a[href='/入门指南/2_从零搭建一个KF工程/2_数据采集配置']")).not.toBeNull();
       expect(host.shadowRoot?.querySelector("a[href='http://rag.local:8000/manuals/html/数采管理/1.png']")).not.toBeNull();
     });
   });

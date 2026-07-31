@@ -8,6 +8,18 @@ export function buildManualImageUrl(config: ResolvedKingIAskWidgetConfig, imageP
   return `${config.apiBaseUrl}/manuals/${imagePath.replace(/^\/+/, "")}`;
 }
 
+// 把 RAG 来源 Markdown 路径转换成 Rspress 文档页面路径。
+export function buildManualPageUrl(sourcePath: string): string | null {
+  const normalized = sourcePath.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!normalized.toLowerCase().endsWith(".md")) {
+    return null;
+  }
+
+  const withoutProjectPrefix = normalized.replace(/^(helperFront\/docs\/|helperFront\/|docs\/)/, "");
+  const withoutExtension = withoutProjectPrefix.replace(/\.md$/i, "");
+  return `/${withoutExtension}`;
+}
+
 // 调用 KingIAsk RAG 问答接口，统一处理超时、认证和网络错误。
 export async function askKingIAsk(config: ResolvedKingIAskWidgetConfig, question: string): Promise<ChatResponse> {
   if (!config.apiBaseUrl) {

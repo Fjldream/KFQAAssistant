@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ResolvedKingIAskWidgetConfig } from "./types";
-import { askKingIAsk, buildManualImageUrl } from "./api";
+import { askKingIAsk, buildManualImageUrl, buildManualPageUrl } from "./api";
 
 const baseConfig: ResolvedKingIAskWidgetConfig = {
   enabled: true,
@@ -113,5 +113,23 @@ describe("buildManualImageUrl", () => {
 
   it("maps relative manual images through the RAG static manual endpoint", () => {
     expect(buildManualImageUrl(baseConfig, "html/a/1.png")).toBe("http://rag.local:8000/manuals/html/a/1.png");
+  });
+});
+
+describe("buildManualPageUrl", () => {
+  it("maps helperFront markdown paths to documentation pages", () => {
+    expect(buildManualPageUrl("helperFront/入门指南/2_从零搭建一个KF工程/2_数据采集配置.md")).toBe(
+      "/入门指南/2_从零搭建一个KF工程/2_数据采集配置"
+    );
+  });
+
+  it("maps docs markdown paths to documentation pages", () => {
+    expect(buildManualPageUrl("docs/详细教程/2_KF开发中心/6_数采管理/数采管理.md")).toBe(
+      "/详细教程/2_KF开发中心/6_数采管理/数采管理"
+    );
+  });
+
+  it("returns null for non-markdown paths", () => {
+    expect(buildManualPageUrl("helperFront/入门指南/image/1.png")).toBeNull();
   });
 });
