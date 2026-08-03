@@ -46,8 +46,6 @@ export interface ApiSettings {
   apiKey: string;
 }
 
-export type ThemePreference = "light" | "dark" | "system";
-
 export type ChatRole = "user" | "assistant";
 
 export interface ChatMessage {
@@ -56,12 +54,5 @@ export interface ChatMessage {
   content: string;
   sources: SourceSnippet[];
   createdAt: string;
-}
-
-export interface ChatSession {
-  id: string;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
-  messages: ChatMessage[];
+  error?: string;
 }

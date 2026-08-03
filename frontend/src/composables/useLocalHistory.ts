@@ -1,11 +1,16 @@
 import { ref, type Ref } from "vue";
 
-const RECENT_QUESTIONS_KEY = "kingiask.recentQuestions";
+const RECENT_QUESTIONS_KEY = "kingiask-deep.recentQuestions";
 const MAX_RECENT_QUESTIONS = 20;
 
 // 从 localStorage 读取最近问题列表，异常时返回空列表。
 function loadRecentQuestions(): string[] {
-  const raw = window.localStorage.getItem(RECENT_QUESTIONS_KEY);
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(RECENT_QUESTIONS_KEY);
+  } catch {
+    return [];
+  }
   if (!raw) {
     return [];
   }
@@ -19,7 +24,11 @@ function loadRecentQuestions(): string[] {
 
 // 保存最近问题列表，最多保留固定数量，避免本地存储无限增长。
 function saveRecentQuestions(questions: string[]): void {
-  window.localStorage.setItem(RECENT_QUESTIONS_KEY, JSON.stringify(questions.slice(0, MAX_RECENT_QUESTIONS)));
+  try {
+    window.localStorage.setItem(RECENT_QUESTIONS_KEY, JSON.stringify(questions.slice(0, MAX_RECENT_QUESTIONS)));
+  } catch {
+    // 存储不可用时静默失败。
+  }
 }
 
 // 管理本地最近问题记录，按最新优先排序并自动去重。

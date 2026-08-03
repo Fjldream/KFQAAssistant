@@ -1,21 +1,16 @@
 import { computed, reactive } from "vue";
 import type { ApiSettings } from "../api/types";
 
-const SETTINGS_KEY = "kingiask-deep.settings";
+const SETTINGS_KEY = "kingiask.settings";
 
 const defaultSettings: ApiSettings = {
   apiBaseUrl: "http://127.0.0.1:8000",
   apiKey: "",
 };
 
-// 从 localStorage 读取前端 API 配置，读取失败时回退到默认值。
+// 从 localStorage 读取前端配置，读取失败时回退到默认值。
 function loadSettings(): ApiSettings {
-  let raw: string | null = null;
-  try {
-    raw = window.localStorage.getItem(SETTINGS_KEY);
-  } catch {
-    return { ...defaultSettings };
-  }
+  const raw = window.localStorage.getItem(SETTINGS_KEY);
   if (!raw) {
     return { ...defaultSettings };
   }
@@ -27,14 +22,8 @@ function loadSettings(): ApiSettings {
 }
 
 // 保存前端配置到 localStorage，让刷新页面后仍然能复用 API 地址和密钥。
-// 注意：API Key 明文保存在浏览器 localStorage，仅适合内网/开发环境；
-// 企业级部署建议改用同源代理或网关鉴权，避免密钥暴露在前端。
 function saveSettings(settings: ApiSettings): void {
-  try {
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  } catch {
-    // 存储不可用时静默失败。
-  }
+  window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
 const state = reactive<ApiSettings>(loadSettings());

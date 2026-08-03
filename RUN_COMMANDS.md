@@ -178,37 +178,41 @@ Body raw JSON:
 
 ## 8. 启动前端
 
-安装依赖：
+新前端 `frontend/`（Apple 风格工作台，推荐）：
 
 ```bash
-cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend"
-pnpm install
-```
-
-启动开发服务：
-
-```bash
-cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend"
-pnpm dev
+cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/front"
+npm install
+npm run dev
 ```
 
 前端地址：
 
 ```text
-http://127.0.0.1:5173
+http://127.0.0.1:5174
 ```
 
 生产构建：
 
 ```bash
-cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend"
-pnpm run build
+cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/front"
+npm run build
 ```
 
-预览生产构建：
+运行测试：
 
 ```bash
-cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend"
+cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/front"
+npm run test
+```
+
+旧版前端 `frontend-legacy/`（已弃用，仅存档）：
+
+```bash
+cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend-legacy"
+pnpm install
+pnpm dev          # http://127.0.0.1:5173
+pnpm run build
 pnpm run preview
 ```
 
@@ -256,6 +260,7 @@ python -m scripts.inspect_retrieval "如何创建采集工程，如何运行它�
 cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/backend"
 conda activate kf-rag
 python -m scripts.evaluate
+python -m scripts.evaluate --output ../storage/reports/evaluation.json
 ```
 
 评估题库位置：
@@ -263,6 +268,8 @@ python -m scripts.evaluate
 ```text
 backend/tests/eval_questions.json
 ```
+
+评估会检查答案关键词、资料来源、图片数量和拒答行为，并输出各规则通过率。存在失败题目时命令返回非零退出码；JSON 报告不会保存 API Key。
 
 ## 13. 测试
 
@@ -278,14 +285,14 @@ python -m pytest -q
 
 ```bash
 cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend"
-pnpm test
+npm test
 ```
 
 前端构建验证：
 
 ```bash
 cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend"
-pnpm run build
+npm run build
 ```
 
 ## 14. 轻量压测
@@ -296,6 +303,7 @@ pnpm run build
 cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/backend"
 conda activate kf-rag
 python -m scripts.load_test -n 10 -c 2
+python -m scripts.load_test -n 5 -c 1 --output ../storage/reports/load-test.json
 ```
 
 指定问题压测：
@@ -305,6 +313,8 @@ cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/backend"
 conda activate kf-rag
 python -m scripts.load_test -n 20 -c 4 --question "如何创建采集工程？"
 ```
+
+压测报告包含成功率、平均耗时、P50/P95/P99、状态码分布和吞吐量。压测会调用真实问答接口，可能产生 DeepSeek 费用；启用后端认证时可追加 `--api-key`，接口地址使用 `--url` 指定。
 
 ## 15. Docker Compose
 
@@ -398,7 +408,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 ```bash
 cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend"
-pnpm dev
+npm run dev
 ```
 
 浏览器打开：

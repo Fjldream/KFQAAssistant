@@ -1,19 +1,17 @@
 <template>
-  <div v-if="image" class="ka-backdrop" role="presentation" @click.self="emit('close')">
-    <figure class="ka-image-preview">
-      <div class="ka-image-preview__head">
-        <button class="ka-icon-button" type="button" title="关闭" @click="emit('close')">
-          <X :size="18" aria-hidden="true" />
-        </button>
-      </div>
-      <img v-if="!loadFailed" :src="image" :alt="image.split('/').pop() ?? image" @error="loadFailed = true" />
+  <div v-if="image" class="ki-preview-backdrop ki-image-backdrop" role="presentation" @click.self="emit('close')">
+    <figure class="ki-preview ki-image-preview">
+      <button class="ki-icon-button" type="button" title="关闭" @click="emit('close')">
+        <X :size="18" aria-hidden="true" />
+      </button>
+      <img v-if="!loadFailed" :src="image" :alt="image" @error="loadFailed = true" />
       <figcaption v-else>图片暂不可预览：{{ image }}</figcaption>
     </figure>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from "vue";
+import { onBeforeUnmount, watch, ref } from "vue";
 import { X } from "lucide-vue-next";
 
 const props = defineProps<{

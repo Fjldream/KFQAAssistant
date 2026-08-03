@@ -1,18 +1,29 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useLocalHistory } from "./useLocalHistory";
 
+beforeEach(() => {
+  window.localStorage.clear();
+});
+
 describe("useLocalHistory", () => {
-  beforeEach(() => {
-    window.localStorage.clear();
+  it("添加问题后置顶并去重", () => {
+    const history = useLocalHistory();
+    history.addQuestion("问题A");
+    history.addQuestion("问题B");
+    history.addQuestion("问题A");
+    expect(history.recentQuestions.value).toEqual(["问题A", "问题B"]);
   });
 
-  it("deduplicates and keeps recent questions newest first", () => {
+  it("清空最近问题", () => {
     const history = useLocalHistory();
+    history.addQuestion("问题A");
+    history.clearQuestions();
+    expect(history.recentQuestions.value).toEqual([]);
+  });
 
-    history.addQuestion("如何创建采集工程？");
-    history.addQuestion("客户端支持哪些系统？");
-    history.addQuestion("如何创建采集工程？");
-
-    expect(history.recentQuestions.value).toEqual(["如何创建采集工程？", "客户端支持哪些系统？"]);
+  it("空问题不记录", () => {
+    const history = useLocalHistory();
+    history.addQuestion("  ");
+    expect(history.recentQuestions.value).toEqual([]);
   });
 });

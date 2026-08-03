@@ -1,40 +1,51 @@
 <template>
-  <div v-if="source" class="ki-material-backdrop ki-reader-backdrop" role="presentation" @click.self="emit('close')">
-    <article class="ki-material-dialog ki-material-dialog--page ki-reader-sheet" role="dialog" aria-modal="true" aria-labelledby="material-title">
-      <header class="ki-material-header">
+  <div
+    v-if="source"
+    class="ka-backdrop"
+    role="presentation"
+    @click.self="emit('close')"
+  >
+    <article
+      class="ka-reader"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ka-material-title"
+    >
+      <header class="ka-reader__head">
         <div>
-          <p class="ki-section-title">帮助手册资料</p>
-          <h2 id="material-title">{{ source.title }}</h2>
-          <span class="ki-source-index">{{ source.evidence_ids.join("、") || "资料" }}</span>
+          <p class="ka-eyebrow">帮助手册资料</p>
+          <h2 id="ka-material-title">{{ source.title }}</h2>
+          <span class="ka-reader__index">{{ source.evidence_ids.join("、") || "资料" }}</span>
         </div>
-        <button class="ki-icon-button" type="button" title="关闭资料" @click="emit('close')">
+        <button class="ka-icon-button" type="button" title="关闭资料" @click="emit('close')">
           <X :size="18" aria-hidden="true" />
         </button>
       </header>
 
-      <div class="ki-material-body">
-        <section class="ki-material-section">
-          <p class="ki-material-label">来源路径</p>
-          <p class="ki-path-text">{{ source.source_path }}</p>
+      <div class="ka-reader__body">
+        <section class="ka-reader__section">
+          <p class="ka-reader__label">来源路径</p>
+          <p class="ka-reader__path">{{ source.source_path }}</p>
         </section>
 
-        <section class="ki-material-section ki-material-section--main">
-          <p class="ki-material-label">命中段落</p>
-          <div class="ki-material-paragraph">{{ source.snippet }}</div>
+        <section class="ka-reader__section">
+          <p class="ka-reader__label">命中段落</p>
+          <p class="ka-reader__snippet">{{ source.snippet }}</p>
         </section>
 
-        <section v-if="source.images.length" class="ki-material-section">
-          <p class="ki-material-label">相关图片</p>
-          <div class="ki-material-image-grid">
+        <section v-if="source.images.length" class="ka-reader__section">
+          <p class="ka-reader__label">相关图片 · {{ source.images.length }}</p>
+          <div class="ka-reader__images">
             <button
               v-for="image in source.images"
               :key="image"
-              class="ki-image-thumb"
+              class="ka-thumb"
               type="button"
+              :title="image.split('/').pop()"
               @click="emit('previewImage', imageUrl(image))"
             >
-              <img :src="imageUrl(image)" :alt="image.split('/').pop()" />
-              <span>{{ image.split('/').pop() }}</span>
+              <img :src="imageUrl(image)" :alt="image.split('/').pop()" loading="lazy" />
+              <span class="ka-thumb__name">{{ image.split('/').pop() }}</span>
             </button>
           </div>
         </section>
@@ -44,6 +55,7 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, watch } from "vue";
 import { X } from "lucide-vue-next";
 import { resolveImageUrl } from "../api/client";
 import type { SourceSnippet } from "../api/types";
@@ -57,6 +69,29 @@ const emit = defineEmits<{
   close: [];
   previewImage: [image: string];
 }>();
+
+// 监听 Escape 键，方便用户快速关闭资料阅读器。
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    emit("close");
+  }
+}
+
+watch(
+  () => props.source,
+  (source) => {
+    if (source) {
+      window.addEventListener("keydown", handleKeydown);
+    } else {
+      window.removeEventListener("keydown", handleKeydown);
+    }
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleKeydown);
+});
 
 // 将资料图片路径转换为浏览器可访问的后端静态资源地址。
 function imageUrl(image: string): string {

@@ -20,13 +20,14 @@ KingIAsk 是一个面向 KF 产品使用手册的企业级 RAG 问答助手。�
 ## 目录说明
 
 ```text
-backend/     FastAPI RAG 后端，包含 API、RAG 核心代码、脚本和测试
-frontend/    KingIAsk Vue 前端工作台
-data/        KF 产品手册原始文档，本地放置，不提交仓库
-storage/     Chroma 向量库和增量索引清单，本地生成，不提交仓库
-docs/        本地学习和设计文档，不提交仓库
-.env.example 可提交的环境变量样例
-.env         本地真实配置，不提交仓库
+backend/          FastAPI RAG 后端，包含 API、RAG 核心代码、脚本和测试
+frontend/            KingIAsk 前端工作台（Apple 风格，推荐）
+frontend-legacy/  旧版 KingIAsk Vue 前端工作台（已弃用，仅存档）
+data/             KF 产品手册原始文档，本地放置，不提交仓库
+storage/          Chroma 向量库和增量索引清单，本地生成，不提交仓库
+docs/             本地学习和设计文档，不提交仓库
+.env.example      可提交的环境变量样例
+.env              本地真实配置，不提交仓库
 ```
 
 ## 环境准备
@@ -50,14 +51,14 @@ DEEPSEEK_API_KEY=你的 DeepSeek API Key
 
 第一次构建索引时会加载 embedding 模型。如果本机没有缓存，需要能访问 HuggingFace 或提前准备好模型缓存。
 
-前端使用 Vue 3、Vite 和 pnpm。进入 `frontend/` 后安装依赖：
+前端使用 Vue 3、Vite 和 npm。进入 `frontend/` 后安装依赖：
 
 ```bash
-cd frontend
-pnpm install
+cd front
+npm install
 ```
 
-如果你习惯 npm，也可以使用 `npm install` 和 `npm run dev`；本项目开发时默认使用 `pnpm`。
+如果你习惯 pnpm，也可以使用 `pnpm install` 和 `pnpm run dev`；本项目新前端默认使用 `npm`。
 
 ## 本地完整启动顺序
 
@@ -212,20 +213,22 @@ http://127.0.0.1:8000/manuals/<手册内相对路径>
 先启动 API 服务，再运行：
 
 ```bash
-cd frontend
-pnpm install
-pnpm run dev
+cd front
+npm install
+npm run dev
 ```
 
 默认访问地址：
 
 ```text
-http://127.0.0.1:5173
+http://127.0.0.1:5174
 ```
 
 如果后端地址不是 `http://127.0.0.1:8000`，可以在前端页面右上角设置里修改 API 地址。前端会把设置保存到浏览器本地存储，刷新页面后继续复用。
 
-如果页面显示“后端未连接”，先确认后端服务已经启动，并检查 `.env` 中的 `CORS_ALLOWED_ORIGINS` 是否包含当前前端地址，例如 `http://127.0.0.1:5173`。
+如果页面显示“后端未连接”，先确认后端服务已经启动，并检查 `.env` 中的 `CORS_ALLOWED_ORIGINS` 是否包含当前前端地址，例如 `http://127.0.0.1:5174`。
+
+> 旧版前端已更名为 `frontend-legacy/`，仅作存档，不再维护。
 
 ## 使用 Docker Compose 部署
 
@@ -481,9 +484,10 @@ backend/tests/eval_questions.json
 ```bash
 cd backend
 python -m scripts.evaluate
+python -m scripts.evaluate --output ../storage/reports/evaluation.json
 ```
 
-评估脚本会检查回答关键词、来源关键词、拒答行为和图片返回数量。它不是最终人工验收标准，但能快速发现检索跑偏、回答缺关键点、该拒答时没有拒答等问题。
+评估脚本会检查回答关键词、来源关键词、拒答行为和图片返回数量，并输出总通过率以及各规则通过率。它不是最终人工验收标准，但能快速发现检索跑偏、回答缺关键点、该拒答时没有拒答等问题。存在失败题目时命令返回非零退出码，适合后续接入 CI；`--output` 可以保存结构化 JSON 报告。
 
 ## 检索调试
 
@@ -501,6 +505,7 @@ python -m scripts.inspect_retrieval "如何创建采集工程？" --top-k 5
 
 ```bash
 python -m scripts.load_test -n 10 -c 2
+python -m scripts.load_test -n 5 -c 1 --output ../storage/reports/load-test.json
 ```
 
 参数含义：
@@ -508,9 +513,12 @@ python -m scripts.load_test -n 10 -c 2
 - `-n`：总请求数。
 - `-c`：并发数。
 - `--question`：压测使用的问题。
-- `--api-url`：问答接口地址，默认读取 `KF_RAG_API_URL`。
+- `--url`：问答接口地址，默认读取 `KF_RAG_API_URL`。
+- `--timeout`：单请求超时时间，单位为秒。
+- `--api-key`：可选的后端 API Key，通过 `X-API-Key` 请求头传递。
+- `--output`：可选的 JSON 报告输出路径，不保存 API Key。
 
-它会输出成功数、失败数、成功率、平均耗时、P95 耗时等指标。
+它会输出成功数、失败数、成功率、平均耗时、P50/P95/P99 耗时、状态码分布和吞吐量。性能测试会调用真实问答接口，可能产生 DeepSeek 费用，建议先用少量请求做冒烟测试。
 
 ## 生产环境建议配置
 

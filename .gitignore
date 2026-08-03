@@ -14,8 +14,8 @@ data/
 docs/learning_notes/
 docs/superpowers/
 .superpowers/
-frontend/node_modules/
-frontend/dist/
+frontend-legacy/node_modules/
+frontend-legacy/dist/
 *.log
 
 # Reasonix 工具内部状态
