@@ -41,6 +41,10 @@ class EvalResult:
     no_answer_matched: bool
     sources: list[str]
     answer: str
+    keyword_passed: bool
+    source_passed: bool
+    image_passed: bool
+    no_answer_passed: bool
 
 
 # 从 JSON 文件读取评估问题，每个问题可包含关键词、来源、图片和拒答预期。
@@ -83,6 +87,14 @@ def _image_requirement_matched(image_count: int, expect_images: bool, min_images
     return image_count >= required_images
 
 
+# 统计结果列表中某条质量规则的通过率，空列表返回 0，避免除零异常。
+def _pass_rate(results: list[EvalResult], attribute: str) -> float:
+    if not results:
+        return 0.0
+    passed = sum(1 for result in results if getattr(result, attribute))
+    return passed / len(results)
+
+
 # 评估单个问题：检查关键词、来源、图片和拒答行为是否符合预期。
 def evaluate_question(
     chain: ChainProtocol,
@@ -110,13 +122,14 @@ def evaluate_question(
     image_matched = _image_requirement_matched(image_count, expect_images, min_images)
     source_count_matched = source_count >= min_sources
     no_answer_matched = actual_no_answer is expect_no_answer
+    keyword_passed = not missing_keywords
+    source_passed = not missing_source_keywords and not forbidden_source_matches and source_count_matched
+    no_answer_passed = no_answer_matched
     passed = (
-        not missing_keywords
-        and not missing_source_keywords
-        and not forbidden_source_matches
+        keyword_passed
+        and source_passed
         and image_matched
-        and source_count_matched
-        and no_answer_matched
+        and no_answer_passed
     )
     return EvalResult(
         question=question,
@@ -131,6 +144,10 @@ def evaluate_question(
         no_answer_matched=no_answer_matched,
         sources=[source.source_path for source in response.sources],
         answer=response.answer,
+        keyword_passed=keyword_passed,
+        source_passed=source_passed,
+        image_passed=image_matched,
+        no_answer_passed=no_answer_passed,
     )
 
 
@@ -143,6 +160,32 @@ def summarize_results(results: list[EvalResult]) -> dict[str, float | int]:
         "passed": passed,
         "failed": total - passed,
         "pass_rate": passed / total if total else 0.0,
+        "keyword_pass_rate": _pass_rate(results, "keyword_passed"),
+        "source_pass_rate": _pass_rate(results, "source_passed"),
+        "image_pass_rate": _pass_rate(results, "image_passed"),
+        "no_answer_pass_rate": _pass_rate(results, "no_answer_passed"),
+    }
+
+
+# 将单题评测结果转换成不包含敏感信息的 JSON 对象，供报告保存和后续分析使用。
+def eval_result_to_dict(result: EvalResult) -> dict[str, object]:
+    return {
+        "question": result.question,
+        "passed": result.passed,
+        "matched_keywords": result.matched_keywords,
+        "missing_keywords": result.missing_keywords,
+        "matched_source_keywords": result.matched_source_keywords,
+        "missing_source_keywords": result.missing_source_keywords,
+        "forbidden_source_matches": result.forbidden_source_matches,
+        "image_count": result.image_count,
+        "source_count": result.source_count,
+        "no_answer_matched": result.no_answer_matched,
+        "keyword_passed": result.keyword_passed,
+        "source_passed": result.source_passed,
+        "image_passed": result.image_passed,
+        "no_answer_passed": result.no_answer_passed,
+        "sources": result.sources,
+        "answer": result.answer,
     }
 
 

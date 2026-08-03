@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from app.schemas.chat import ChatResponse, SourceSnippet
-from scripts.evaluate import evaluate_question, load_eval_questions, summarize_results
+from scripts.evaluate import eval_result_to_dict, evaluate_question, load_eval_questions, summarize_results
 
 
 class FakeChain:
@@ -168,3 +168,38 @@ def test_summarize_results_calculates_pass_rate():
     assert summary["total"] == 2
     assert summary["passed"] == 1
     assert summary["pass_rate"] == 0.5
+
+
+def test_summarize_results_includes_rule_level_pass_rates():
+    results = [
+        evaluate_question(FakeChain(), "问题一", ["菜单栏"], ["页面编辑器/简介"], True, False),
+        evaluate_question(FakeChain(), "手册里有没有微信登录说明？", ["不存在的词"], [], False, True),
+    ]
+
+    summary = summarize_results(results)
+
+    assert summary["keyword_pass_rate"] == 0.5
+    assert summary["source_pass_rate"] == 1.0
+    assert summary["image_pass_rate"] == 1.0
+    assert summary["no_answer_pass_rate"] == 1.0
+
+
+def test_eval_result_to_dict_returns_json_safe_result_fields():
+    result = evaluate_question(
+        FakeChain(),
+        "页面编辑器主要包括哪些区域？",
+        ["菜单栏"],
+        ["页面编辑器/简介"],
+        True,
+        False,
+    )
+
+    payload = eval_result_to_dict(result)
+
+    assert payload["question"] == "页面编辑器主要包括哪些区域？"
+    assert payload["passed"] is True
+    assert payload["answer"]
+    assert payload["sources"] == ["页面编辑器/简介.md"]
+    assert payload["missing_keywords"] == []
+    assert payload["image_count"] == 1
+    assert payload["source_count"] == 1
