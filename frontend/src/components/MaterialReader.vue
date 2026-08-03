@@ -1,6 +1,6 @@
 <template>
-  <div v-if="source" class="ki-material-backdrop" role="presentation" @click.self="emit('close')">
-    <article class="ki-material-dialog ki-material-dialog--page" role="dialog" aria-modal="true" aria-labelledby="material-title">
+  <div v-if="source" class="ki-material-backdrop ki-reader-backdrop" role="presentation" @click.self="emit('close')">
+    <article class="ki-material-dialog ki-material-dialog--page ki-reader-sheet" role="dialog" aria-modal="true" aria-labelledby="material-title">
       <header class="ki-material-header">
         <div>
           <p class="ki-section-title">帮助手册资料</p>

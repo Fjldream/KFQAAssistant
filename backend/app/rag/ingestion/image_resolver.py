@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
@@ -68,7 +69,18 @@ def mark_html_images(html: str) -> tuple[str, dict[str, str]]:
 # 将文档中的相对图片路径解析成相对知识库根目录的 POSIX 路径。
 def resolve_image_path(raw_path: str, document_path: Path, root_dir: Path) -> str:
     normalized = raw_path.replace("\\", "/").strip()
-    candidate = (document_path.parent / normalized).resolve()
+    parsed = urlparse(normalized)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return normalized
+
+    if normalized.startswith("/"):
+        root_relative = normalized.lstrip("/")
+        candidate = (root_dir / root_relative).resolve()
+        public_candidate = (root_dir / "public" / root_relative).resolve()
+        if not candidate.exists() and public_candidate.exists():
+            candidate = public_candidate
+    else:
+        candidate = (document_path.parent / normalized).resolve()
     try:
         return candidate.relative_to(root_dir.resolve()).as_posix()
     except ValueError:

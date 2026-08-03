@@ -1,11 +1,18 @@
 <template>
   <div class="ki-layout">
-    <aside class="ki-layout__sidebar" :class="{ 'is-open': sidebarOpen }" aria-label="知识导航">
+    <aside id="ki-sidebar" class="ki-layout__sidebar" :class="{ 'is-open': sidebarOpen }" aria-label="知识导航">
       <slot name="sidebar"></slot>
     </aside>
 
     <main class="ki-layout__main" aria-label="问答工作区">
-      <button class="ki-icon-button ki-mobile-menu" type="button" title="打开导航" @click="toggleSidebar">
+      <button
+        class="ki-icon-button ki-mobile-menu"
+        type="button"
+        title="打开导航"
+        :aria-expanded="sidebarOpen"
+        aria-controls="ki-sidebar"
+        @click="toggleSidebar"
+      >
         <Menu :size="18" aria-hidden="true" />
       </button>
       <slot></slot>

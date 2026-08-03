@@ -13,7 +13,7 @@
       </button>
     </header>
 
-    <section class="ki-sidebar-section" aria-label="知识库状态">
+    <section class="ki-sidebar-section ki-sidebar-section--status" aria-label="知识库状态">
       <div class="ki-section-heading">
         <p class="ki-section-title">知识库状态</p>
         <span class="ki-status-badge">Live</span>
@@ -38,7 +38,7 @@
       <p class="ki-small-text">最后构建：{{ formatLastBuiltAt(lastBuiltAt) }}</p>
     </section>
 
-    <section class="ki-sidebar-section" aria-label="常用问题">
+    <section class="ki-sidebar-section ki-sidebar-section--starters" aria-label="常用问题">
       <p class="ki-section-title">常用问题</p>
       <button
         v-for="question in commonQuestions"
@@ -53,7 +53,7 @@
       </button>
     </section>
 
-    <section class="ki-sidebar-section" aria-label="最近会话">
+    <section class="ki-sidebar-section ki-sidebar-section--recent" aria-label="最近会话">
       <div class="ki-section-heading">
         <p class="ki-section-title">最近会话</p>
         <button class="ki-text-button" type="button" @click="emit('clearHistory')">清空</button>

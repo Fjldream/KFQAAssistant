@@ -1,6 +1,6 @@
 <template>
   <section class="ki-chat-workspace">
-    <header class="ki-chat-header">
+    <header class="ki-chat-header ki-workspace-header">
       <div>
         <p class="ki-section-title">问答工作区</p>
         <h1>KingIAsk 产品知识助手</h1>
@@ -9,8 +9,8 @@
       <button class="ki-secondary-button" type="button" @click="emit('clear')">清空会话</button>
     </header>
 
-    <div class="ki-message-list" aria-live="polite">
-      <div v-if="messages.length === 0" class="ki-welcome-state">
+    <div class="ki-message-list ki-conversation" aria-live="polite">
+      <div v-if="messages.length === 0" class="ki-welcome-state ki-empty-conversation">
         <div class="ki-welcome-mark" aria-hidden="true">AI</div>
         <p class="ki-section-title">开始提问</p>
         <h2>询问 KF 产品手册中的操作问题</h2>
@@ -66,7 +66,7 @@
 
     <p v-if="errorMessage" class="ki-error-text">{{ errorMessage }}</p>
 
-    <form class="ki-input-bar" @submit.prevent="submitQuestion">
+    <form class="ki-input-bar ki-composer" @submit.prevent="submitQuestion">
       <div class="ki-input-label">
         <span>向 KingIAsk 提问</span>
         <small>Enter 发送，Shift + Enter 换行</small>

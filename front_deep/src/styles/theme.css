@@ -1,0 +1,1888 @@
+/* ============================================================
+   KingIAsk · Apple 风格设计系统
+   - 浅色 / 深色自适应（html[data-theme]，由 useTheme 解析 system）
+   - 玻璃质感（backdrop-filter blur + saturate）
+   - iOS 级 spring 缓动曲线（ease-drawer / ease-out）
+   - SF Pro 系统字体 + 光学字号 + 负 tracking
+   - prefers-reduced-motion / prefers-reduced-transparency 适配
+   ============================================================ */
+
+:root {
+  /* —— 排版 —— */
+  --ka-font:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+
+  /* —— 浅色 tokens —— */
+  --ka-bg: #f5f5f7;
+  --ka-bg-deep: #ececef;
+  --ka-surface: rgba(255, 255, 255, 0.72);
+  --ka-surface-solid: #ffffff;
+  --ka-surface-muted: rgba(118, 118, 128, 0.09);
+  --ka-surface-elevated: rgba(255, 255, 255, 0.88);
+  --ka-surface-input: rgba(118, 118, 128, 0.07);
+  --ka-border: rgba(0, 0, 0, 0.08);
+  --ka-border-strong: rgba(0, 0, 0, 0.16);
+  --ka-text: #1d1d1f;
+  --ka-text-secondary: #6e6e73;
+  --ka-text-tertiary: #86868b;
+  --ka-accent: #0071e3;
+  --ka-accent-strong: #0060c9;
+  --ka-accent-soft: rgba(0, 113, 227, 0.1);
+  --ka-accent-ring: rgba(0, 113, 227, 0.22);
+  --ka-user-bubble: #0a84ff;
+  --ka-green: #34c759;
+  --ka-green-soft: rgba(52, 199, 89, 0.14);
+  --ka-yellow: #ff9f0a;
+  --ka-yellow-soft: rgba(255, 159, 10, 0.14);
+  --ka-red: #ff3b30;
+  --ka-red-soft: rgba(255, 59, 48, 0.12);
+  --ka-on-accent: #ffffff;
+
+  /* —— 玻璃与阴影 —— */
+  --ka-glass: blur(22px) saturate(180%);
+  --ka-glass-heavy: blur(32px) saturate(200%);
+  --ka-shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --ka-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.05), 0 16px 40px rgba(0, 0, 0, 0.08);
+  --ka-shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.14), 0 40px 90px rgba(0, 0, 0, 0.18);
+
+  /* —— 圆角 —— */
+  --ka-radius-sm: 12px;
+  --ka-radius-md: 16px;
+  --ka-radius-lg: 22px;
+  --ka-radius-pill: 999px;
+
+  /* —— 缓动（iOS spring 曲线） —— */
+  --ka-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ka-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ka-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+  /* —— 布局尺寸 —— */
+  --ka-sidebar-width: 272px;
+  --ka-evidence-width: 372px;
+  --ka-content-max: 880px;
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --ka-bg: #000000;
+  --ka-bg-deep: #161618;
+  --ka-surface: rgba(28, 28, 30, 0.72);
+  --ka-surface-solid: #1c1c1e;
+  --ka-surface-muted: rgba(255, 255, 255, 0.08);
+  --ka-surface-elevated: rgba(44, 44, 46, 0.9);
+  --ka-surface-input: rgba(255, 255, 255, 0.07);
+  --ka-border: rgba(255, 255, 255, 0.12);
+  --ka-border-strong: rgba(255, 255, 255, 0.22);
+  --ka-text: #f5f5f7;
+  --ka-text-secondary: #98989d;
+  --ka-text-tertiary: #6e6e73;
+  --ka-accent: #2997ff;
+  --ka-accent-strong: #5ab0ff;
+  --ka-accent-soft: rgba(41, 151, 255, 0.16);
+  --ka-accent-ring: rgba(41, 151, 255, 0.34);
+  --ka-user-bubble: #0a84ff;
+  --ka-green: #30d158;
+  --ka-green-soft: rgba(48, 209, 88, 0.16);
+  --ka-yellow: #ffd60a;
+  --ka-yellow-soft: rgba(255, 214, 10, 0.16);
+  --ka-red: #ff453a;
+  --ka-red-soft: rgba(255, 69, 58, 0.16);
+  --ka-on-accent: #ffffff;
+  --ka-shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --ka-shadow-card: 0 2px 10px rgba(0, 0, 0, 0.4), 0 18px 44px rgba(0, 0, 0, 0.5);
+  --ka-shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.55), 0 48px 100px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+/* —— 基础 —— */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-width: 320px;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  background: var(--ka-bg);
+  color: var(--ka-text);
+  font-family: var(--ka-font);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition:
+    background-color 300ms ease,
+    color 300ms ease;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+}
+
+button:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+:focus {
+  outline: none;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--ka-accent-ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: var(--ka-border-strong);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ka-text-tertiary);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+   AppShell 三栏布局
+   ============================================================ */
+.ka-app {
+  display: grid;
+  grid-template-columns: var(--ka-sidebar-width) minmax(0, 1fr) var(--ka-evidence-width);
+  height: 100vh;
+  overflow: hidden;
+  background: var(--ka-bg);
+}
+
+.ka-app__sidebar,
+.ka-app__evidence {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ka-app__sidebar {
+  border-right: 1px solid var(--ka-border);
+  background: var(--ka-surface);
+  -webkit-backdrop-filter: var(--ka-glass);
+  backdrop-filter: var(--ka-glass);
+}
+
+.ka-app__main {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 500px at 50% -10%, var(--ka-accent-soft), transparent 62%),
+    var(--ka-bg);
+}
+
+.ka-app__evidence {
+  border-left: 1px solid var(--ka-border);
+  background: var(--ka-surface);
+  -webkit-backdrop-filter: var(--ka-glass);
+  backdrop-filter: var(--ka-glass);
+  animation: ka-panel-in 280ms var(--ka-ease-drawer) both;
+  transform-origin: right center;
+}
+
+/* 资料中心收起时退回两栏布局，聊天区占满剩余宽度。 */
+.ka-app--evidence-hidden {
+  grid-template-columns: var(--ka-sidebar-width) minmax(0, 1fr);
+}
+
+/* —— 顶部工具条（仅在主区） —— */
+.ka-topbar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 26px;
+}
+
+.ka-topbar__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.ka-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 汉堡菜单只在移动端（窄屏）用于打开左侧导航抽屉，桌面端隐藏。 */
+.ka-mobile-menu {
+  display: none;
+}
+
+/* ============================================================
+   按钮
+   ============================================================ */
+.ka-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: var(--ka-radius-pill);
+  padding: 0 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition:
+    transform 160ms var(--ka-ease-out),
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    opacity 180ms ease;
+}
+
+.ka-button:active {
+  transform: scale(0.96);
+  transition-duration: 100ms;
+}
+
+.ka-button--primary {
+  background: var(--ka-accent);
+  color: var(--ka-on-accent);
+  box-shadow: 0 4px 14px var(--ka-accent-ring);
+}
+
+.ka-button--primary:hover:not(:disabled) {
+  background: var(--ka-accent-strong);
+}
+
+.ka-button--ghost {
+  border: 1px solid var(--ka-border);
+  background: var(--ka-surface-elevated);
+  color: var(--ka-text);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.ka-button--ghost:hover:not(:disabled) {
+  background: var(--ka-surface-muted);
+  border-color: var(--ka-border-strong);
+}
+
+.ka-button--soft {
+  background: var(--ka-accent-soft);
+  color: var(--ka-accent);
+}
+
+.ka-button--soft:hover:not(:disabled) {
+  background: var(--ka-accent-ring);
+}
+
+.ka-icon-button {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: var(--ka-radius-pill);
+  color: var(--ka-text-secondary);
+  transition:
+    transform 160ms var(--ka-ease-out),
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.ka-icon-button:hover:not(:disabled) {
+  background: var(--ka-surface-muted);
+  color: var(--ka-text);
+}
+
+.ka-icon-button:active {
+  transform: scale(0.9);
+  transition-duration: 100ms;
+}
+
+/* ============================================================
+   侧边栏
+   ============================================================ */
+.ka-sidebar {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  padding: 22px 18px 18px;
+  overflow: hidden;
+}
+
+.ka-sidebar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 6px 16px;
+}
+
+.ka-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.ka-brand__mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #0071e3 0%, #5ac8fa 55%, #64d2ff 100%);
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  box-shadow: 0 4px 12px var(--ka-accent-ring);
+}
+
+.ka-brand__name {
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.ka-brand__sub {
+  margin: 3px 0 0;
+  color: var(--ka-text-tertiary);
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+}
+
+.ka-sidebar__scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 4px 8px;
+}
+
+.ka-section {
+  margin-top: 22px;
+}
+
+.ka-section:first-child {
+  margin-top: 0;
+}
+
+.ka-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+  padding: 0 6px;
+}
+
+.ka-eyebrow {
+  margin: 0;
+  color: var(--ka-text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ka-section__action {
+  color: var(--ka-accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 8px;
+  transition: background-color 160ms ease;
+}
+
+.ka-section__action:hover {
+  background: var(--ka-accent-soft);
+}
+
+/* —— 状态卡（紧凑两行） —— */
+.ka-status {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--ka-border);
+  border-radius: var(--ka-radius-md);
+  background: var(--ka-surface-elevated);
+  box-shadow: var(--ka-shadow-soft);
+  padding: 11px 14px 10px;
+}
+
+.ka-status__main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.ka-status__dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--ka-text-tertiary);
+  transition: background-color 260ms ease, box-shadow 260ms ease;
+}
+
+.ka-status__dot[data-state="ok"] {
+  background: var(--ka-green);
+  box-shadow: 0 0 0 3px var(--ka-green-soft);
+}
+
+.ka-status__dot[data-state="warn"] {
+  background: var(--ka-yellow);
+  box-shadow: 0 0 0 3px var(--ka-yellow-soft);
+}
+
+.ka-status__dot[data-state="error"] {
+  background: var(--ka-red);
+  box-shadow: 0 0 0 3px var(--ka-red-soft);
+}
+
+.ka-status__dot[data-state="loading"] {
+  background: var(--ka-text-tertiary);
+  animation: ka-status-pulse 1.2s ease-in-out infinite;
+}
+
+.ka-status__health {
+  color: var(--ka-text);
+}
+
+.ka-status__divider {
+  color: var(--ka-text-tertiary);
+}
+
+.ka-status__index {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ka-text-secondary);
+  font-size: 12px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ka-status__index[data-state="ok"] {
+  color: var(--ka-green);
+}
+
+.ka-status__index[data-state="warn"] {
+  color: var(--ka-yellow);
+}
+
+.ka-status__index[data-state="error"] {
+  color: var(--ka-red);
+}
+
+.ka-status__metrics {
+  display: flex;
+  align-items: baseline;
+  gap: 13px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ka-border);
+  color: var(--ka-text-tertiary);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.ka-status__metric strong {
+  margin-left: 2px;
+  color: var(--ka-text);
+  font-size: 14px;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 向量库更新时间：独立一行，小号 + 淡化，弱化存在感 */
+.ka-status__built {
+  margin: 6px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--ka-border);
+  color: var(--ka-text-tertiary);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  opacity: 0.78;
+}
+
+@keyframes ka-status-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* —— 问题 / 会话列表 —— */
+.ka-list {
+  display: grid;
+  gap: 2px;
+}
+
+.ka-list-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  border-radius: 11px;
+  padding: 8px 10px;
+  color: var(--ka-text);
+  text-align: left;
+  transition:
+    background-color 150ms ease,
+    transform 150ms var(--ka-ease-out);
+}
+
+.ka-list-item:active {
+  transform: scale(0.98);
+}
+
+.ka-list-item__text {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ka-list-item__icon {
+  flex: 0 0 auto;
+  color: var(--ka-text-tertiary);
+  opacity: 0.8;
+}
+
+.ka-list-item--active {
+  background: var(--ka-accent-soft);
+}
+
+.ka-list-item--active .ka-list-item__icon {
+  color: var(--ka-accent);
+  opacity: 1;
+}
+
+/* —— 会话项：主按钮 + 删除按钮平级，避免嵌套交互元素 —— */
+.ka-session {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 11px;
+  transition: background-color 150ms ease;
+}
+
+.ka-session:hover {
+  background: var(--ka-surface-muted);
+}
+
+.ka-session.is-active {
+  background: var(--ka-accent-soft);
+}
+
+.ka-session__main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  border-radius: 11px;
+  padding: 8px 6px 8px 10px;
+  color: var(--ka-text);
+  text-align: left;
+  transition: transform 150ms var(--ka-ease-out);
+}
+
+.ka-session__main:active {
+  transform: scale(0.98);
+}
+
+.ka-session.is-active .ka-list-item__icon {
+  color: var(--ka-accent);
+  opacity: 1;
+}
+
+.ka-session__del {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  margin-right: 4px;
+  border-radius: 8px;
+  color: var(--ka-text-tertiary);
+  opacity: 0;
+  transition:
+    opacity 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.ka-session:hover .ka-session__del,
+.ka-session__del:focus-visible {
+  opacity: 1;
+}
+
+.ka-session__del:hover {
+  background: var(--ka-red-soft);
+  color: var(--ka-red);
+}
+
+.ka-empty {
+  padding: 10px 6px;
+  color: var(--ka-text-tertiary);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   聊天工作区
+   ============================================================ */
+.ka-chat {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  height: 100%;
+  max-width: var(--ka-content-max);
+  margin: 0 auto;
+  padding: 64px 30px 24px;
+}
+
+.ka-chat__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 4px;
+}
+
+.ka-chat__head h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 780;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.ka-chat__head p {
+  margin: 5px 0 0;
+  color: var(--ka-text-secondary);
+  font-size: 13.5px;
+}
+
+/* —— 消息列表 —— */
+.ka-messages {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 4px 10px;
+  scroll-behavior: smooth;
+}
+
+.ka-welcome {
+  display: grid;
+  height: 100%;
+  min-height: 420px;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  padding: 24px;
+}
+
+.ka-welcome__mark {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  margin-bottom: 26px;
+  border-radius: 19px;
+  background: linear-gradient(135deg, #0071e3 0%, #5ac8fa 60%, #86e0ff 100%);
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  box-shadow: 0 12px 32px var(--ka-accent-ring);
+}
+
+.ka-welcome h2 {
+  margin: 0;
+  max-width: 560px;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  line-height: 1.18;
+}
+
+.ka-welcome__desc {
+  margin: 12px 0 0;
+  max-width: 460px;
+  color: var(--ka-text-secondary);
+  font-size: 14.5px;
+  line-height: 1.7;
+}
+
+.ka-welcome__starters {
+  display: grid;
+  width: min(560px, 100%);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 34px;
+}
+
+.ka-starter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--ka-border);
+  border-radius: var(--ka-radius-md);
+  background: var(--ka-surface-elevated);
+  box-shadow: var(--ka-shadow-soft);
+  padding: 13px 15px;
+  text-align: left;
+  font-size: 13.5px;
+  font-weight: 550;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  transition:
+    transform 180ms var(--ka-ease-out),
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.ka-starter:hover {
+  transform: translateY(-2px);
+  border-color: var(--ka-accent-ring);
+  box-shadow: var(--ka-shadow-card);
+}
+
+.ka-starter:active {
+  transform: scale(0.97);
+}
+
+.ka-starter__arrow {
+  flex: 0 0 auto;
+  color: var(--ka-accent);
+}
+
+/* —— 消息气泡 —— */
+.ka-msg {
+  display: flex;
+  gap: 11px;
+  margin: 0 0 22px;
+  opacity: 1;
+  animation: ka-msg-enter 260ms var(--ka-ease-out) both;
+}
+
+.ka-msg:nth-child(2) {
+  animation-delay: 30ms;
+}
+
+.ka-msg:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.ka-msg:nth-child(4) {
+  animation-delay: 90ms;
+}
+
+.ka-msg:nth-child(n + 5) {
+  animation-delay: 120ms;
+}
+
+.ka-msg--user {
+  justify-content: flex-end;
+}
+
+.ka-msg__avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  margin-top: 2px;
+  border-radius: 9px;
+  background: var(--ka-surface-muted);
+  color: var(--ka-text-secondary);
+}
+
+.ka-msg--assistant .ka-msg__avatar {
+  background: linear-gradient(135deg, #0071e3, #5ac8fa);
+  color: #ffffff;
+  box-shadow: 0 4px 10px var(--ka-accent-ring);
+}
+
+.ka-msg__body {
+  display: flex;
+  max-width: min(78%, 660px);
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ka-msg--user .ka-msg__body {
+  align-items: flex-end;
+}
+
+.ka-msg__bubble {
+  border-radius: 20px;
+  padding: 12px 16px;
+  font-size: 14.5px;
+  line-height: 1.72;
+  letter-spacing: -0.006em;
+  overflow-wrap: break-word;
+}
+
+.ka-msg--assistant .ka-msg__bubble {
+  border-top-left-radius: 7px;
+  border: 1px solid var(--ka-border);
+  background: var(--ka-surface-elevated);
+  box-shadow: var(--ka-shadow-soft);
+}
+
+.ka-msg--user .ka-msg__bubble {
+  border-top-right-radius: 7px;
+  background: var(--ka-user-bubble);
+  color: #ffffff;
+}
+
+.ka-msg__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  color: var(--ka-text-tertiary);
+  font-size: 11px;
+}
+
+.ka-msg__bubble > :first-child {
+  margin-top: 0;
+}
+
+.ka-msg__bubble > :last-child {
+  margin-bottom: 0;
+}
+
+.ka-msg__bubble h1,
+.ka-msg__bubble h2,
+.ka-msg__bubble h3 {
+  margin: 1.1em 0 0.45em;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+.ka-msg__bubble h1 {
+  font-size: 1.28em;
+}
+
+.ka-msg__bubble h2 {
+  font-size: 1.15em;
+}
+
+.ka-msg__bubble h3 {
+  font-size: 1.05em;
+}
+
+.ka-msg__bubble p {
+  margin: 0.55em 0;
+}
+
+.ka-msg__bubble ul,
+.ka-msg__bubble ol {
+  margin: 0.55em 0;
+  padding-left: 1.4em;
+}
+
+.ka-msg__bubble li {
+  margin: 0.28em 0;
+}
+
+.ka-msg__bubble code {
+  border-radius: 6px;
+  background: var(--ka-surface-muted);
+  padding: 0.15em 0.4em;
+  font-size: 0.9em;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+}
+
+.ka-msg__bubble pre {
+  overflow-x: auto;
+  border-radius: 12px;
+  background: var(--ka-bg-deep);
+  padding: 12px 14px;
+}
+
+.ka-msg__bubble pre code {
+  background: none;
+  padding: 0;
+}
+
+.ka-msg__bubble blockquote {
+  margin: 0.6em 0;
+  border-left: 3px solid var(--ka-accent);
+  padding-left: 12px;
+  color: var(--ka-text-secondary);
+}
+
+.ka-msg__bubble table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  font-size: 0.94em;
+}
+
+.ka-msg__bubble th,
+.ka-msg__bubble td {
+  border: 1px solid var(--ka-border-strong);
+  padding: 6px 10px;
+}
+
+.ka-msg__bubble a {
+  color: var(--ka-accent);
+  text-decoration: none;
+}
+
+.ka-msg__bubble a:hover {
+  text-decoration: underline;
+}
+
+.ka-msg__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px;
+}
+
+.ka-msg__action {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--ka-radius-pill);
+  padding: 0 12px;
+  color: var(--ka-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 150ms var(--ka-ease-out);
+}
+
+.ka-msg__action:hover {
+  background: var(--ka-surface-muted);
+  color: var(--ka-text);
+}
+
+.ka-msg__action:active {
+  transform: scale(0.95);
+}
+
+.ka-source-chip {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 28px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--ka-border);
+  border-radius: var(--ka-radius-pill);
+  background: var(--ka-surface-muted);
+  padding: 0 12px;
+  color: var(--ka-accent);
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    transform 150ms var(--ka-ease-out);
+}
+
+.ka-source-chip:hover {
+  border-color: var(--ka-accent-ring);
+  background: var(--ka-accent-soft);
+}
+
+.ka-source-chip:active {
+  transform: scale(0.96);
+}
+
+/* —— 思考动画 —— */
+.ka-thinking {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.ka-thinking__orbits {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 13px;
+  border-radius: var(--ka-radius-pill);
+  background: var(--ka-accent-soft);
+}
+
+.ka-thinking__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ka-accent);
+  animation: ka-thinking-bounce 1.05s var(--ka-ease-in-out) infinite;
+}
+
+.ka-thinking__dot:nth-child(2) {
+  animation-delay: 140ms;
+}
+
+.ka-thinking__dot:nth-child(3) {
+  animation-delay: 280ms;
+}
+
+.ka-thinking__text strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.ka-thinking__text span {
+  display: block;
+  margin-top: 2px;
+  color: var(--ka-text-secondary);
+  font-size: 12px;
+}
+
+/* —— 错误 —— */
+.ka-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 4px;
+  border-radius: 12px;
+  background: var(--ka-red-soft);
+  padding: 10px 14px;
+  color: var(--ka-red);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* —— 输入栏 —— */
+.ka-composer {
+  position: relative;
+  border: 1px solid var(--ka-border);
+  border-radius: var(--ka-radius-lg);
+  background: var(--ka-surface-elevated);
+  box-shadow: var(--ka-shadow-card);
+  -webkit-backdrop-filter: var(--ka-glass);
+  backdrop-filter: var(--ka-glass);
+  padding: 8px 8px 10px;
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.ka-composer:focus-within {
+  border-color: var(--ka-accent-ring);
+  box-shadow:
+    var(--ka-shadow-card),
+    0 0 0 4px var(--ka-accent-soft);
+}
+
+.ka-composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  max-height: 180px;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  padding: 10px 10px 2px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  letter-spacing: -0.006em;
+}
+
+.ka-composer textarea::placeholder {
+  color: var(--ka-text-tertiary);
+}
+
+.ka-composer__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 6px 0;
+}
+
+.ka-composer__hint {
+  color: var(--ka-text-tertiary);
+  font-size: 11.5px;
+}
+
+.ka-composer__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ============================================================
+   证据面板
+   ============================================================ */
+.ka-evidence {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  padding: 22px 18px 18px;
+  overflow: hidden;
+}
+
+.ka-evidence__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 6px 16px;
+}
+
+.ka-evidence__head h2 {
+  margin: 5px 0 0;
+  font-size: 20px;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+}
+
+.ka-evidence__count {
+  margin-top: 3px;
+  color: var(--ka-text-tertiary);
+  font-size: 12px;
+}
+
+.ka-evidence__list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 2px 4px 10px;
+}
+
+.ka-source {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--ka-border);
+  border-radius: var(--ka-radius-md);
+  background: var(--ka-surface-elevated);
+  box-shadow: var(--ka-shadow-soft);
+  padding: 13px 15px;
+  text-align: left;
+  transition:
+    transform 180ms var(--ka-ease-out),
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.ka-source:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ka-shadow-card);
+}
+
+.ka-source:active {
+  transform: scale(0.985);
+}
+
+.ka-source.is-active {
+  border-color: var(--ka-accent-ring);
+  box-shadow: var(--ka-shadow-card), 0 0 0 3px var(--ka-accent-soft);
+}
+
+.ka-source__top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 8px;
+}
+
+.ka-source__index {
+  display: grid;
+  min-width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--ka-accent-soft);
+  color: var(--ka-accent);
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.ka-source__title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ka-source__snippet {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  margin: 0 0 10px;
+  color: var(--ka-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.ka-source__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ka-score {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+}
+
+.ka-score__bar {
+  height: 4px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ka-surface-muted);
+}
+
+.ka-score__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--ka-accent), #5ac8fa);
+  transition: width 500ms var(--ka-ease-out);
+}
+
+.ka-score__value {
+  color: var(--ka-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ka-source__chevron {
+  flex: 0 0 auto;
+  color: var(--ka-text-tertiary);
+}
+
+.ka-evidence__empty {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  padding: 30px 16px;
+  text-align: center;
+}
+
+.ka-evidence__empty p {
+  margin: 0 0 6px;
+  color: var(--ka-text-secondary);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.ka-evidence__empty span {
+  color: var(--ka-text-tertiary);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   弹窗 / 资料阅读器 / 图片预览
+   ============================================================ */
+.ka-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.38);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  padding: 30px;
+  animation: ka-fade-in 200ms ease both;
+}
+
+.ka-dialog {
+  width: min(520px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--ka-border);
+  border-radius: var(--ka-radius-lg);
+  background: var(--ka-surface-elevated);
+  box-shadow: var(--ka-shadow-pop);
+  -webkit-backdrop-filter: var(--ka-glass-heavy);
+  backdrop-filter: var(--ka-glass-heavy);
+  padding: 22px;
+  animation: ka-pop-in 280ms var(--ka-ease-drawer) both;
+}
+
+.ka-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.ka-dialog__head h2 {
+  margin: 5px 0 0;
+  font-size: 21px;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+}
+
+.ka-field {
+  display: grid;
+  gap: 7px;
+  margin-top: 15px;
+}
+
+.ka-field__label {
+  color: var(--ka-text-secondary);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.ka-field input,
+.ka-field select {
+  width: 100%;
+  border: 1px solid var(--ka-border);
+  border-radius: 12px;
+  outline: none;
+  background: var(--ka-surface-input);
+  padding: 10px 13px;
+  font-size: 14px;
+  letter-spacing: -0.006em;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.ka-field input:focus,
+.ka-field select:focus {
+  border-color: var(--ka-accent-ring);
+  background: var(--ka-surface-solid);
+  box-shadow: 0 0 0 4px var(--ka-accent-soft);
+}
+
+.ka-field__hint {
+  color: var(--ka-text-tertiary);
+  font-size: 11.5px;
+}
+
+.ka-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 22px;
+}
+
+/* —— 主题分段控件 —— */
+.ka-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  border-radius: 12px;
+  background: var(--ka-surface-input);
+  padding: 3px;
+}
+
+.ka-segmented button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  border-radius: 9px;
+  color: var(--ka-text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.ka-segmented button.is-active {
+  background: var(--ka-surface-solid);
+  color: var(--ka-text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* —— 资料阅读器 —— */
+.ka-reader {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1040px, 100%);
+  max-height: calc(100vh - 60px);
+  overflow: hidden;
+  border: 1px solid var(--ka-border);
+  border-radius: var(--ka-radius-lg);
+  background: var(--ka-surface-elevated);
+  box-shadow: var(--ka-shadow-pop);
+  -webkit-backdrop-filter: var(--ka-glass-heavy);
+  backdrop-filter: var(--ka-glass-heavy);
+  animation: ka-pop-in 300ms var(--ka-ease-drawer) both;
+}
+
+.ka-reader__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--ka-border);
+  padding: 20px 24px;
+}
+
+.ka-reader__head h2 {
+  margin: 6px 0 0;
+  font-size: 20px;
+  font-weight: 720;
+  letter-spacing: -0.018em;
+  line-height: 1.35;
+}
+
+.ka-reader__index {
+  display: inline-block;
+  margin-top: 8px;
+  border-radius: 7px;
+  background: var(--ka-accent-soft);
+  padding: 2px 8px;
+  color: var(--ka-accent);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.ka-reader__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 24px;
+  background: var(--ka-surface-solid);
+}
+
+.ka-reader__section {
+  margin-bottom: 20px;
+}
+
+.ka-reader__label {
+  margin: 0 0 8px;
+  color: var(--ka-text-tertiary);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ka-reader__path {
+  margin: 0;
+  border-radius: 10px;
+  background: var(--ka-surface-muted);
+  padding: 10px 13px;
+  color: var(--ka-text-secondary);
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.ka-reader__snippet {
+  margin: 0;
+  border: 1px solid var(--ka-border);
+  border-radius: 14px;
+  background: var(--ka-surface-muted);
+  padding: 15px 17px;
+  font-size: 14px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+}
+
+.ka-reader__images {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.ka-thumb {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--ka-border);
+  border-radius: 13px;
+  background: var(--ka-surface-muted);
+  padding: 0;
+  text-align: left;
+  transition:
+    transform 180ms var(--ka-ease-out),
+    box-shadow 180ms ease;
+}
+
+.ka-thumb:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ka-shadow-card);
+}
+
+.ka-thumb:active {
+  transform: scale(0.97);
+}
+
+.ka-thumb img {
+  display: block;
+  width: 100%;
+  height: 118px;
+  object-fit: cover;
+}
+
+.ka-thumb__name {
+  display: block;
+  overflow: hidden;
+  padding: 8px 10px 9px;
+  color: var(--ka-text-secondary);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* —— 图片预览 —— */
+.ka-image-preview {
+  width: min(940px, 100%);
+  margin: 0;
+}
+
+.ka-image-preview__head {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.ka-image-preview__head .ka-icon-button {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.ka-image-preview__head .ka-icon-button:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.ka-image-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 78vh;
+  margin: 0 auto;
+  border-radius: var(--ka-radius-md);
+  box-shadow: var(--ka-shadow-pop);
+  object-fit: contain;
+  animation: ka-pop-in 280ms var(--ka-ease-drawer) both;
+}
+
+.ka-image-preview figcaption {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12.5px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* ============================================================
+   动画关键帧
+   ============================================================ */
+@keyframes ka-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ka-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ka-msg-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ka-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes ka-thinking-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@keyframes ka-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ka-spin {
+  animation: ka-spin 720ms linear infinite;
+}
+
+/* ============================================================
+   响应式
+   ============================================================ */
+@media (max-width: 1240px) {
+  :root {
+    --ka-sidebar-width: 244px;
+    --ka-evidence-width: 336px;
+  }
+
+  .ka-chat {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+}
+
+@media (max-width: 1020px) {
+  .ka-app {
+    grid-template-columns: 228px minmax(0, 1fr);
+  }
+
+  .ka-app--evidence-hidden {
+    grid-template-columns: 228px minmax(0, 1fr);
+  }
+
+  .ka-app__evidence {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-height: 36vh;
+    border-top: 1px solid var(--ka-border);
+    border-left: 0;
+  }
+
+  .ka-evidence {
+    padding-top: 16px;
+  }
+
+  .ka-evidence__list {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(240px, 1fr);
+    overflow-x: auto;
+    overflow-y: hidden;
+    align-content: stretch;
+  }
+
+  .ka-evidence__empty {
+    min-height: 120px;
+  }
+}
+
+@media (max-width: 820px) {
+  .ka-app {
+    display: block;
+  }
+
+  .ka-app__sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 90;
+    display: none;
+    width: min(320px, calc(100vw - 44px));
+    box-shadow: 24px 0 60px rgba(0, 0, 0, 0.22);
+  }
+
+  .ka-app__sidebar.is-open {
+    display: block;
+    animation: ka-sidebar-in 240ms var(--ka-ease-drawer) both;
+  }
+
+  .ka-app__main {
+    height: 100vh;
+  }
+
+  .ka-app__evidence {
+    display: none;
+  }
+
+  .ka-mobile-menu {
+    display: inline-grid !important;
+  }
+
+  .ka-chat {
+    padding: 58px 16px 16px;
+  }
+
+  .ka-topbar {
+    padding: 0 14px;
+  }
+
+  .ka-topbar__title {
+    display: none;
+  }
+
+  .ka-welcome__starters {
+    grid-template-columns: 1fr;
+  }
+
+  .ka-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .ka-dialog,
+  .ka-reader {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 22px 22px 0 0;
+  }
+
+  .ka-msg__body {
+    max-width: 92%;
+  }
+}
+
+@keyframes ka-sidebar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ============================================================
+   无障碍：减少动效 / 减少透明
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ka-app__sidebar,
+  .ka-app__evidence,
+  .ka-composer,
+  .ka-dialog,
+  .ka-reader,
+  .ka-backdrop {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .ka-app__sidebar,
+  .ka-app__evidence,
+  .ka-composer,
+  .ka-dialog,
+  .ka-reader {
+    background: var(--ka-surface-solid);
+  }
+
+  .ka-backdrop {
+    background: rgba(0, 0, 0, 0.55);
+  }
+}

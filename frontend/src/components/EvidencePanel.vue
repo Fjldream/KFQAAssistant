@@ -1,17 +1,17 @@
 <template>
-  <section class="ki-evidence-panel">
-    <header>
+  <section class="ki-evidence-panel ki-evidence-inspector">
+    <header class="ki-evidence-header">
       <p class="ki-section-title">资料与图片</p>
       <h2>资料中心</h2>
       <span>{{ sources.length }} 个资料片段</span>
     </header>
 
-    <div v-if="sources.length === 0" class="ki-empty-block">
+    <div v-if="sources.length === 0" class="ki-empty-block ki-evidence-empty">
       <p>暂无资料</p>
       <span>提问后会显示手册段落、路径和相关图片。</span>
     </div>
 
-    <div v-else class="ki-source-list">
+    <div v-else class="ki-source-list ki-evidence-list">
       <button
         v-for="source in sources"
         :key="source.source_path"

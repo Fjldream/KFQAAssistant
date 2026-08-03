@@ -10,7 +10,7 @@ const configTarget = path.join(outdir, "helper-assistant.config.js");
 const watch = process.argv.includes("--watch");
 
 const options = {
-  entryPoints: [path.join(root, "widget", "src", "index.ts")],
+  entryPoints: [path.join(root, "kingiask-widget", "src", "index.ts")],
   outfile,
   bundle: true,
   minify: true,

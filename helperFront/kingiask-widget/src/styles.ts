@@ -37,10 +37,11 @@ export const WIDGET_STYLES = `
 .kiw-sources { margin-top: 12px; border-top: 1px solid #eef2f7; padding-top: 10px; }
 .kiw-sources-heading { margin-bottom: 8px; color: #6b7280; font-size: 12px; font-weight: 800; }
 .kiw-source { display: grid; gap: 5px; margin-top: 8px; border: 1px solid #e5e7eb; border-radius: 12px; background: #f8fbff; padding: 10px; color: #4b5563; font-size: 12px; white-space: normal; }
-.kiw-source-title { display: block; color: #1f2937; font-size: 13px; font-weight: 800; }
+.kiw-source-header { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.kiw-source-badge { flex: 0 0 auto; border-radius: 999px; background: #eaf3ff; padding: 3px 8px; color: #1677ff; font-size: 12px; font-weight: 800; line-height: 1.35; }
+.kiw-source-title { display: block; min-width: 0; color: #1f2937; font-size: 13px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kiw-source-title-link { text-decoration: none; }
 .kiw-source-title-link:hover { color: #1677ff; }
-.kiw-source-path { color: #6b7280; word-break: break-all; }
 .kiw-source-snippet { color: #4b5563; line-height: 1.55; }
 .kiw-source-action { display: inline-flex; width: fit-content; margin-top: 3px; color: #1677ff; font-weight: 800; text-decoration: none; }
 .kiw-source-action:hover { color: #0958d9; text-decoration: underline; text-underline-offset: 3px; }

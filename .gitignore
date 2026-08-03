@@ -17,3 +17,13 @@ docs/superpowers/
 frontend/node_modules/
 frontend/dist/
 *.log
+
+# Reasonix 工具内部状态
+.reasonix/
+reasonix.toml
+
+# 实验性前端目录（如需提交请移除该规则）
+front_new/
+
+# KF 帮助手册站点内容（约 319MB，图片为主，不适合进入 git）
+helperFront/docs/

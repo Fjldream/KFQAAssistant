@@ -10,6 +10,7 @@ describe('resolveConfig', () => {
     expect(config.title).toBe('KingIAsk');
     expect(config.position).toBe('right-bottom');
     expect(config.timeoutMs).toBe(60000);
+    expect(config.persistSession).toBe(true);
   });
 
   it('merges global config and init overrides', () => {
@@ -23,6 +24,7 @@ describe('resolveConfig', () => {
     const config = resolveConfig({
       title: '页面助手',
       timeoutMs: 15000,
+      persistSession: false,
     });
 
     expect(config.enabled).toBe(true);
@@ -30,6 +32,7 @@ describe('resolveConfig', () => {
     expect(config.title).toBe('页面助手');
     expect(config.apiKey).toBe('global-key');
     expect(config.timeoutMs).toBe(15000);
+    expect(config.persistSession).toBe(false);
 
     delete window.KINGIASK_WIDGET_CONFIG;
   });

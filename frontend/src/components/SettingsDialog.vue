@@ -1,6 +1,6 @@
 <template>
-  <div v-if="open" class="ki-dialog-backdrop" role="presentation" @click.self="emit('close')">
-    <section class="ki-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+  <div v-if="open" class="ki-dialog-backdrop ki-settings-backdrop" role="presentation" @click.self="emit('close')">
+    <section class="ki-dialog ki-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <header class="ki-dialog-header">
         <div>
           <p class="ki-section-title">连接设置</p>

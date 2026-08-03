@@ -5,5 +5,6 @@ window.KINGIASK_WIDGET_CONFIG = {
   title: "KingIAsk",
   welcomeText: "你好，我可以帮你查询 KF 产品手册。",
   position: "right-bottom",
-  timeoutMs: 60000
+  timeoutMs: 60000,
+  persistSession: true
 };

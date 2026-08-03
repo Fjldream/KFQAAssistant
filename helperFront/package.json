@@ -9,9 +9,9 @@
     "dev": "npm run build:widget && npm run generate:meta && rspress dev",
     "format": "prettier --write .",
     "preview": "rspress preview --host 0.0.0.0",
-    "test:widget": "vitest run widget/src",
-    "build:widget": "node widget/build.mjs",
-    "dev:widget": "node widget/build.mjs --watch"
+    "test:widget": "vitest run kingiask-widget/src",
+    "build:widget": "node kingiask-widget/build.mjs",
+    "dev:widget": "node kingiask-widget/build.mjs --watch"
   },
   "dependencies": {
     "@rspress/core": "^2.0.3"

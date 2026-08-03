@@ -49,3 +49,39 @@ def test_resolve_image_path_returns_posix_relative_path(tmp_path: Path):
     resolved = resolve_image_path(".\\2.png", doc_path, tmp_path)
 
     assert resolved == "docs/2.png"
+
+
+def test_resolve_image_path_keeps_remote_urls(tmp_path: Path):
+    doc_path = tmp_path / "docs" / "intro.md"
+    doc_path.parent.mkdir()
+    doc_path.write_text("demo", encoding="utf-8")
+
+    resolved = resolve_image_path("https://example.com/image.png", doc_path, tmp_path)
+
+    assert resolved == "https://example.com/image.png"
+
+
+def test_resolve_image_path_treats_root_relative_path_as_manual_root(tmp_path: Path):
+    doc_path = tmp_path / "docs" / "intro.md"
+    doc_path.parent.mkdir()
+    doc_path.write_text("demo", encoding="utf-8")
+    image_path = tmp_path / "image" / "default.png"
+    image_path.parent.mkdir()
+    image_path.write_bytes(b"png")
+
+    resolved = resolve_image_path("/image/default.png", doc_path, tmp_path)
+
+    assert resolved == "image/default.png"
+
+
+def test_resolve_image_path_supports_rspress_public_assets(tmp_path: Path):
+    doc_path = tmp_path / "docs" / "intro.md"
+    doc_path.parent.mkdir()
+    doc_path.write_text("demo", encoding="utf-8")
+    image_path = tmp_path / "public" / "image" / "default.png"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"png")
+
+    resolved = resolve_image_path("/image/default.png", doc_path, tmp_path)
+
+    assert resolved == "public/image/default.png"

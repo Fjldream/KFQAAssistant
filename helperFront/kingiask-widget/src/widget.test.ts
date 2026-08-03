@@ -10,12 +10,14 @@ const config: ResolvedKingIAskWidgetConfig = {
   title: "KingIAsk",
   welcomeText: "欢迎使用助手",
   position: "right-bottom",
-  timeoutMs: 60000
+  timeoutMs: 60000,
+  persistSession: true
 };
 
 describe("createKingIAskWidget", () => {
   afterEach(() => {
     document.body.innerHTML = "";
+    window.sessionStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -57,7 +59,7 @@ describe("createKingIAskWidget", () => {
         {
           title: "采集工程",
           source_path: "helperFront/入门指南/2_从零搭建一个KF工程/2_数据采集配置.md",
-          snippet: "点击新建工程。",
+          snippet: "# helperFront/入门指南/2_从零搭建一个KF工程/2_数据采集配置\n\n点击新建工程。",
           evidence_ids: ["资料 1"],
           images: ["html/数采管理/1.png"],
           score: 0.9
@@ -76,9 +78,48 @@ describe("createKingIAskWidget", () => {
     await vi.waitFor(() => {
       expect(host.shadowRoot?.textContent).toContain("点击新建工程。");
       expect(host.shadowRoot?.textContent).toContain("采集工程");
+      expect(host.shadowRoot?.textContent).toContain("资料 1");
+      expect(host.shadowRoot?.textContent).not.toContain("helperFront/入门指南");
+      expect(host.shadowRoot?.textContent).not.toContain(".md");
       expect(host.shadowRoot?.querySelector("a[href='/入门指南/2_从零搭建一个KF工程/2_数据采集配置']")).not.toBeNull();
       expect(host.shadowRoot?.querySelector("a[href='http://rag.local:8000/manuals/html/数采管理/1.png']")).not.toBeNull();
     });
+  });
+
+  it("restores the conversation from session storage after the widget is recreated", async () => {
+    vi.spyOn(api, "askKingIAsk").mockResolvedValue({
+      answer: "进入数采管理后点击新建。",
+      sources: [
+        {
+          title: "数据采集配置",
+          source_path: "helperFront/入门指南/2_从零搭建一个KF工程/2_数据采集配置.md",
+          snippet: "点击新建按钮创建采集工程。",
+          evidence_ids: ["资料 1"],
+          images: [],
+          score: 0.9
+        }
+      ]
+    });
+
+    const firstInstance = createKingIAskWidget(config);
+    const firstHost = document.querySelector("[data-kingiask-widget-root]") as HTMLElement;
+    firstHost.shadowRoot?.querySelector<HTMLButtonElement>("button[data-role='launcher']")?.click();
+    const textarea = firstHost.shadowRoot?.querySelector<HTMLTextAreaElement>("textarea[data-role='question']") as HTMLTextAreaElement;
+    textarea.value = "如何创建采集工程？";
+    firstHost.shadowRoot?.querySelector<HTMLButtonElement>("button[data-role='send']")?.click();
+
+    await vi.waitFor(() => {
+      expect(firstHost.shadowRoot?.textContent).toContain("进入数采管理后点击新建。");
+    });
+
+    firstInstance?.destroy();
+    createKingIAskWidget(config);
+    const secondHost = document.querySelector("[data-kingiask-widget-root]") as HTMLElement;
+    secondHost.shadowRoot?.querySelector<HTMLButtonElement>("button[data-role='launcher']")?.click();
+
+    expect(secondHost.shadowRoot?.textContent).toContain("如何创建采集工程？");
+    expect(secondHost.shadowRoot?.textContent).toContain("进入数采管理后点击新建。");
+    expect(secondHost.shadowRoot?.querySelector("a[href='/入门指南/2_从零搭建一个KF工程/2_数据采集配置']")).not.toBeNull();
   });
 
   it("removes widget DOM when destroyed", () => {

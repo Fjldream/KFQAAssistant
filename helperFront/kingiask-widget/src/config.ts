@@ -11,6 +11,7 @@ export const DEFAULT_CONFIG: ResolvedKingIAskWidgetConfig = {
   welcomeText: '你好，我可以帮你查询 KF 产品手册。',
   position: 'right-bottom',
   timeoutMs: 60000,
+  persistSession: true,
 };
 
 // 合并默认配置、全局配置和 init 入参，得到插件运行时使用的最终配置。
@@ -31,5 +32,6 @@ export function resolveConfig(
     position:
       merged.position === 'left-bottom' ? 'left-bottom' : 'right-bottom',
     timeoutMs: Number(merged.timeoutMs || DEFAULT_CONFIG.timeoutMs),
+    persistSession: merged.persistSession !== false,
   };
 }

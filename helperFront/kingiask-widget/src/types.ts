@@ -8,6 +8,7 @@ export type KingIAskWidgetConfig = {
   welcomeText?: string;
   position?: WidgetPosition;
   timeoutMs?: number;
+  persistSession?: boolean;
 };
 
 export type ResolvedKingIAskWidgetConfig = Required<KingIAskWidgetConfig>;
