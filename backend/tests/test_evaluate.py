@@ -1,8 +1,10 @@
 import json
+import sys
 from pathlib import Path
 
+import scripts.evaluate as evaluate_module
 from app.schemas.chat import ChatResponse, SourceSnippet
-from scripts.evaluate import eval_result_to_dict, evaluate_question, load_eval_questions, summarize_results
+from scripts.evaluate import eval_result_to_dict, evaluate_question, load_eval_questions, main, summarize_results
 
 
 class FakeChain:
@@ -203,3 +205,48 @@ def test_eval_result_to_dict_returns_json_safe_result_fields():
     assert payload["missing_keywords"] == []
     assert payload["image_count"] == 1
     assert payload["source_count"] == 1
+
+
+def test_evaluate_main_writes_json_report_and_returns_zero_for_passing_questions(tmp_path: Path, monkeypatch):
+    eval_file = tmp_path / "eval.json"
+    output_file = tmp_path / "reports" / "evaluation.json"
+    eval_file.write_text(
+        json.dumps([{"question": "问题", "expected_keywords": ["菜单栏"]}], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(evaluate_module, "create_rag_chain", lambda: FakeChain())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["evaluate", "--file", str(eval_file), "--output", str(output_file)],
+    )
+
+    exit_code = main()
+
+    assert exit_code == 0
+    payload = json.loads(output_file.read_text(encoding="utf-8"))
+    assert payload["summary"]["total"] == 1
+    assert payload["results"][0]["question"] == "问题"
+
+
+def test_evaluate_main_returns_one_for_failed_questions(tmp_path: Path, monkeypatch):
+    eval_file = tmp_path / "eval.json"
+    eval_file.write_text(
+        json.dumps([{"question": "问题", "expected_keywords": ["不存在的词"]}], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(evaluate_module, "create_rag_chain", lambda: FakeChain())
+    monkeypatch.setattr(sys, "argv", ["evaluate", "--file", str(eval_file)])
+
+    assert main() == 1
+
+
+def test_evaluate_main_reports_missing_file_in_chinese(tmp_path: Path, monkeypatch, capsys):
+    missing_file = tmp_path / "missing.json"
+    monkeypatch.setattr(sys, "argv", ["evaluate", "--file", str(missing_file)])
+
+    exit_code = main()
+
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    assert "评测文件" in captured.err

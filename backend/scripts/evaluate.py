@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -189,6 +190,20 @@ def eval_result_to_dict(result: EvalResult) -> dict[str, object]:
     }
 
 
+# 构建包含汇总和逐题详情的结构化评测报告，方便保存和后续比较基线。
+def build_evaluation_report(results: list[EvalResult]) -> dict[str, object]:
+    return {
+        "summary": summarize_results(results),
+        "results": [eval_result_to_dict(result) for result in results],
+    }
+
+
+# 创建报告目录并以 UTF-8 写入格式化 JSON，确保中文内容可直接阅读。
+def write_json_report(path: Path, report: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 # 将评估结果打印成适合命令行阅读的中文报告。
 def print_report(results: list[EvalResult]) -> None:
     summary = summarize_results(results)
@@ -196,6 +211,10 @@ def print_report(results: list[EvalResult]) -> None:
     print(f"通过: {summary['passed']}")
     print(f"失败: {summary['failed']}")
     print(f"通过率: {summary['pass_rate']:.0%}")
+    print(f"关键词规则通过率: {summary['keyword_pass_rate']:.0%}")
+    print(f"来源规则通过率: {summary['source_pass_rate']:.0%}")
+    print(f"图片规则通过率: {summary['image_pass_rate']:.0%}")
+    print(f"拒答规则通过率: {summary['no_answer_pass_rate']:.0%}")
     print()
 
     for index, result in enumerate(results, start=1):
@@ -213,13 +232,19 @@ def print_report(results: list[EvalResult]) -> None:
         print()
 
 
-# 命令行评估入口：批量运行评估集，帮助判断 RAG 检索和回答质量。
-def main() -> None:
+# 命令行评估入口：批量运行评估集并用退出码标识质量门禁结果。
+def main() -> int:
     parser = argparse.ArgumentParser(description="评估 KF RAG 问答效果")
     parser.add_argument("--file", type=Path, default=Path("tests/eval_questions.json"), help="评估问题 JSON 文件")
+    parser.add_argument("--output", type=Path, help="可选的 JSON 报告输出路径")
     args = parser.parse_args()
 
-    questions = load_eval_questions(args.file)
+    try:
+        questions = load_eval_questions(args.file)
+    except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        print(f"评测文件处理失败：{exc}", file=sys.stderr)
+        return 2
+
     chain = create_rag_chain()
     results = [
         evaluate_question(
@@ -236,7 +261,11 @@ def main() -> None:
         for item in questions
     ]
     print_report(results)
+    if args.output:
+        write_json_report(args.output, build_evaluation_report(results))
+        print(f"JSON 报告已写入：{args.output}")
+    return 0 if all(result.passed for result in results) else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
