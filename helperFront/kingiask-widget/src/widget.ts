@@ -243,12 +243,20 @@ export function createKingIAskWidget(config: ResolvedKingIAskWidgetConfig): Widg
     panel.classList.add("open");
     launcher.setAttribute("aria-expanded", "true");
     launcher.style.display = "none";
+    window.addEventListener("keydown", onKeydown);
     textarea.focus();
   };
   const closePanel = () => {
     panel.classList.remove("open");
     launcher.setAttribute("aria-expanded", "false");
     launcher.style.display = "";
+    window.removeEventListener("keydown", onKeydown);
+  };
+  // 面板打开时按 Escape 快速关闭。
+  const onKeydown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      closePanel();
+    }
   };
   const setLoading = (loading: boolean) => {
     textarea.disabled = loading;
@@ -298,6 +306,9 @@ export function createKingIAskWidget(config: ResolvedKingIAskWidgetConfig): Widg
   document.body.appendChild(host);
 
   return {
-    destroy: () => host.remove()
+    destroy: () => {
+      window.removeEventListener("keydown", onKeydown);
+      host.remove();
+    }
   };
 }
