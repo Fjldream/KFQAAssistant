@@ -40,3 +40,22 @@ def test_strip_inline_markdown_keeps_heading_and_list_structure():
 def test_strip_inline_markdown_does_not_touch_image_markers():
     text = "正文。\n[[KF_IMAGE_0]]\n"
     assert _strip_inline_markdown(text) == text
+
+
+def test_strip_inline_markdown_unescapes_image_marker():
+    # 回归：markdownify 会把 [[KF_IMAGE_0]] 转义为 [[KF\_IMAGE\_0]]，
+    # 还原标记中的下划线正是加入 unescape 的唯一动机，必须直接覆盖该路径。
+    assert _strip_inline_markdown(r"[[KF\_IMAGE\_0]]") == "[[KF_IMAGE_0]]"
+
+
+def test_strip_inline_markdown_unescapes_asterisks_and_underscores():
+    # markdownify 0.14.1 默认（escape_asterisks=True、escape_underscores=True、
+    # escape_misc=False）实测只转义 `*` 和 `_`；二者都必须被还原。
+    assert _strip_inline_markdown(r"a \* b \_ c") == "a * b _ c"
+
+
+def test_strip_inline_markdown_does_not_unescape_markdownify_non_escaped_chars():
+    # 除 `*`、`_` 外，markdownify 0.14.1 默认不转义 ~ { } ( ) # + - . ! | [ ] ` \ 等，
+    # 正文中这些反斜杠序列属于用户原文，不得被误反解（防字符类过宽回归）。
+    text = r"~ { } ( ) # + - . ! | [ ] 与 ` 和 \ 均原样"
+    assert _strip_inline_markdown(text) == text

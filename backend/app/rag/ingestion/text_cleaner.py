@@ -40,8 +40,12 @@ def _strip_inline_markdown(text: str) -> str:
     text = _INLINE_BOLD_PATTERN.sub(r"\1", text)
     text = _INLINE_ITALIC_PATTERN.sub(r"\1", text)
     text = _INLINE_CODE_PATTERN.sub(r"\1", text)
-    # 还原 markdownify 对 `*` `_` `[` 等字符的转义（如图片标记 [[KF_IMAGE_0]] 中的下划线）。
-    text = re.sub(r"\\([\\`*_\[\]])", r"\1", text)
+    # 还原 markdownify 0.14.1 的实际转义。经实证（真实 conda 环境 + 源码核对）：
+    # 默认选项下（escape_asterisks=True、escape_underscores=True、escape_misc=False）
+    # markdownify 只会把文本节点中的 `*` 转义为 `\*`、`_` 转义为 `\_`（如图片标记
+    # [[KF_IMAGE_0]] 的下划线）。`~ { } ( ) # + - . ! | [ ] ` \` 等默认均不转义，
+    # 若纳入反解会破坏正文中用户原有的反斜杠序列，故只反解 `_` 与 `*`。
+    text = re.sub(r"\\([_*])", r"\1", text)
     return text
 
 
