@@ -74,3 +74,42 @@ def build_sections(blocks: list[Block]) -> list[tuple[str, str]]:
         current_chain = "\n".join(f"{'#' * level} {text}" for level, text in sorted(chain.items()))
     flush()
     return sections
+
+
+def _split_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+    """复用旧固定长度切分：段落内超长时的最终兜底。"""
+    if len(text) <= chunk_size:
+        return [text]
+    chunks: list[str] = []
+    start = 0
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        chunk = text[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        if end == len(text):
+            break
+        start = max(0, end - chunk_overlap)
+    return chunks
+
+
+def split_oversized_section(body: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+    paragraphs = [paragraph.strip() for paragraph in re.split(r"\n\s*\n", body) if paragraph.strip()]
+    pieces: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    for paragraph in paragraphs:
+        if len(paragraph) > chunk_size:
+            if current:
+                pieces.append("\n\n".join(current))
+                current, current_len = [], 0
+            pieces.extend(_split_text(paragraph, chunk_size, chunk_overlap))
+            continue
+        if current and current_len + len(paragraph) + 2 > chunk_size:
+            pieces.append("\n\n".join(current))
+            current, current_len = [], 0
+        current.append(paragraph)
+        current_len += len(paragraph) + 2
+    if current:
+        pieces.append("\n\n".join(current))
+    return [piece for piece in pieces if piece.strip()]

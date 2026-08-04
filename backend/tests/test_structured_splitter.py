@@ -65,3 +65,29 @@ def test_build_sections_preamble_before_first_heading_is_own_section():
     blocks = [TextBlock("文档开头。"), HeadingBlock(level=1, text="正文"), TextBlock("内容。")]
     sections = build_sections(blocks)
     assert sections == [("", "文档开头。"), ("# 正文", "内容。")]
+
+
+from app.rag.ingestion.structured_splitter import split_oversized_section
+
+
+def test_split_oversized_section_prefers_paragraph_boundaries():
+    body = "\n\n".join(["第一段说明文字。", "第二段说明文字。", "第三段说明文字。", "第四段说明文字。"])
+    pieces = split_oversized_section(body, chunk_size=12, chunk_overlap=0)
+    assert len(pieces) == 4
+    assert pieces[0] == "第一段说明文字。"
+    assert all("段说明文字。" in piece for piece in pieces)
+
+
+def test_split_oversized_section_merges_small_paragraphs_up_to_limit():
+    body = "\n\n".join(["段一。", "段二。", "段三。", "段四。", "段五。"])
+    pieces = split_oversized_section(body, chunk_size=16, chunk_overlap=0)
+    # 每段 3 字 + 空行 2 字：16 字上限可容纳约 3 段
+    assert len(pieces) < 5
+    assert all(len(piece) <= 16 for piece in pieces)
+
+
+def test_split_oversized_section_falls_back_to_character_split_for_long_paragraph():
+    body = "X" * 100
+    pieces = split_oversized_section(body, chunk_size=30, chunk_overlap=5)
+    assert pieces[0] == "X" * 30
+    assert pieces[1].startswith("X" * 5)
