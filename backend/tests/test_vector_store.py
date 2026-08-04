@@ -48,6 +48,7 @@ class FakeStore:
 def make_vector_store(fake_store: FakeStore) -> ChromaVectorStore:
     vector_store = ChromaVectorStore.__new__(ChromaVectorStore)
     vector_store.store = fake_store
+    vector_store.max_chunks_per_source = 2
     return vector_store
 
 
@@ -138,3 +139,33 @@ def test_similarity_search_includes_neighbor_chunks():
 
     assert [item.chunk.id for item in results] == ["guide.md::1", "guide.md::0", "guide.md::2"]
     assert fake_store.get_ids == [["guide.md::0", "guide.md::2"]]
+
+
+# 验证结构化分块后，同一相关页面的多个小节 chunk 能一起进入检索结果。
+def test_diversify_results_allows_multiple_chunks_per_source():
+    from app.rag.retrieval.vector_store import diversify_results
+    from app.rag.retrieval.retriever import RetrievedChunk
+
+    def chunk(source, index, content="内容"):
+        return RetrievedChunk(chunk=DocumentChunk(id=f"{source}::{index}", title=source, source_path=source, content=content), score=1.0 - index / 10)
+
+    results = [
+        chunk("a.md", 0), chunk("a.md", 1), chunk("a.md", 2),
+        chunk("b.md", 0), chunk("b.md", 1),
+    ]
+    selected = diversify_results(results, top_k=4, max_chunks_per_source=2)
+    assert [item.chunk.source_path for item in selected] == ["a.md", "a.md", "b.md", "b.md"]
+
+
+# 验证来源不足时，第二遍仍会用其他来源的未选中 chunk 填满 top_k。
+def test_diversify_results_still_covers_more_sources_when_scarce():
+    from app.rag.retrieval.vector_store import diversify_results
+    from app.rag.retrieval.retriever import RetrievedChunk
+
+    def chunk(source, index):
+        return RetrievedChunk(chunk=DocumentChunk(id=f"{source}::{index}", title=source, source_path=source, content="内容"), score=0.9 - index / 10)
+
+    results = [chunk("a.md", 0), chunk("a.md", 1), chunk("b.md", 0), chunk("c.md", 0)]
+    selected = diversify_results(results, top_k=4, max_chunks_per_source=2)
+    assert len(selected) == 4
+    assert selected[-1].chunk.source_path == "c.md"

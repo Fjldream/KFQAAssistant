@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     chunk_size: int = 700
     chunk_overlap: int = 100
     top_k: int = 5
+    retrieval_max_chunks_per_source: int = 2
     max_images_per_source: int = 5
     max_images_per_answer: int = 8
     enable_query_rewrite: bool = False

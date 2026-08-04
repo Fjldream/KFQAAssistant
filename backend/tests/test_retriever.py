@@ -254,7 +254,7 @@ def test_diversify_results_prefers_different_sources_before_filling_duplicates()
         ),
     ]
 
-    diversified = diversify_results(results, top_k=2)
+    diversified = diversify_results(results, top_k=2, max_chunks_per_source=1)
 
     assert [item.chunk.id for item in diversified] == ["a::0", "b::0"]
 
@@ -275,6 +275,6 @@ def test_diversify_results_fills_remaining_slots_with_high_score_duplicates():
         ),
     ]
 
-    diversified = diversify_results(results, top_k=3)
+    diversified = diversify_results(results, top_k=3, max_chunks_per_source=1)
 
     assert [item.chunk.id for item in diversified] == ["a::0", "b::0", "a::1"]

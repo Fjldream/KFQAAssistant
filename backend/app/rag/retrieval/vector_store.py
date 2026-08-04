@@ -45,18 +45,22 @@ def combined_score(query: str, item: RetrievedChunk) -> float:
     return (item.score or 0.0) + keyword_score(query, item.chunk) * KEYWORD_SCORE_WEIGHT
 
 
-# 对已排序的检索结果做来源多样性筛选，优先覆盖更多不同 source_path。
-def diversify_results(results: list[RetrievedChunk], top_k: int) -> list[RetrievedChunk]:
+# 对已排序的检索结果做来源多样性筛选：第一遍每个 source_path 最多取 max_chunks_per_source 个，
+# 优先覆盖更多来源；第二遍用其余未选中 chunk 填满 top_k，保证相关页面的多个小节都能进入上下文。
+def diversify_results(
+    results: list[RetrievedChunk], top_k: int, max_chunks_per_source: int = 2
+) -> list[RetrievedChunk]:
     selected: list[RetrievedChunk] = []
     selected_ids: set[str] = set()
-    used_sources: set[str] = set()
+    source_counts: dict[str, int] = {}
 
     for item in results:
-        if item.chunk.source_path in used_sources:
+        source = item.chunk.source_path
+        if source_counts.get(source, 0) >= max_chunks_per_source:
             continue
         selected.append(item)
         selected_ids.add(item.chunk.id)
-        used_sources.add(item.chunk.source_path)
+        source_counts[source] = source_counts.get(source, 0) + 1
         if len(selected) == top_k:
             return selected
 
@@ -64,6 +68,7 @@ def diversify_results(results: list[RetrievedChunk], top_k: int) -> list[Retriev
         if item.chunk.id in selected_ids:
             continue
         selected.append(item)
+        selected_ids.add(item.chunk.id)
         if len(selected) == top_k:
             return selected
 
@@ -82,9 +87,10 @@ def neighbor_chunk_ids(chunk_id: str, radius: int = 1) -> list[str]:
 # Chroma 向量库封装，负责写入 chunks 和执行相似度检索。
 class ChromaVectorStore:
     # 初始化 Chroma collection，并绑定 embedding 函数和持久化目录。
-    def __init__(self, persist_dir: Path, embeddings) -> None:
+    def __init__(self, persist_dir: Path, embeddings, max_chunks_per_source: int = 2) -> None:
         self.persist_dir = persist_dir
         self.embeddings = embeddings
+        self.max_chunks_per_source = max_chunks_per_source
         self.store = Chroma(
             collection_name="kf_manual",
             persist_directory=str(persist_dir),
@@ -151,7 +157,7 @@ class ChromaVectorStore:
             key=lambda item: combined_score(query, item),
             reverse=True,
         )
-        diversified = diversify_results(ranked, top_k)
+        diversified = diversify_results(ranked, top_k, self.max_chunks_per_source)
         return self._include_neighbor_chunks(diversified)
 
     # 为主要命中结果补充同文档前后相邻 chunk，让操作流程回答能拿到更完整上下文。

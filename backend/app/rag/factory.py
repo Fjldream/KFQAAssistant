@@ -15,7 +15,11 @@ from app.rag.retrieval.vector_store import ChromaVectorStore
 def create_vector_store() -> ChromaVectorStore:
     settings = get_settings()
     embeddings = LazyEmbeddings(settings.embedding_model_name)
-    return ChromaVectorStore(settings.chroma_persist_dir, embeddings)
+    return ChromaVectorStore(
+        settings.chroma_persist_dir,
+        embeddings,
+        max_chunks_per_source=settings.retrieval_max_chunks_per_source,
+    )
 
 
 # 创建生产用 RAG Chain，把向量检索、Retriever 和 DeepSeek 客户端组装起来。
