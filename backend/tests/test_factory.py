@@ -23,7 +23,12 @@ def test_create_vector_store_reuses_cached_instance(monkeypatch):
 
     class FakeVectorStore:
         # 记录向量库构造次数，模拟真实 ChromaVectorStore。
-        def __init__(self, persist_dir: Path, embeddings) -> None:
+        def __init__(
+            self,
+            persist_dir: Path,
+            embeddings,
+            max_chunks_per_source: int = 2,
+        ) -> None:
             calls["vector_store"] += 1
             self.persist_dir = persist_dir
             self.embeddings = embeddings
@@ -81,7 +86,12 @@ def test_clear_rag_factory_cache_resets_cached_instances(monkeypatch):
 
     class FakeVectorStore:
         # 记录清理缓存前后是否重新构造向量库。
-        def __init__(self, persist_dir: Path, embeddings) -> None:
+        def __init__(
+            self,
+            persist_dir: Path,
+            embeddings,
+            max_chunks_per_source: int = 2,
+        ) -> None:
             calls["vector_store"] += 1
 
     clear_factory_caches()
