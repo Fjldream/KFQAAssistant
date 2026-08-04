@@ -3,7 +3,10 @@ from app.rag.ingestion.structured_splitter import (
     TextBlock,
     build_sections,
     parse_heading_blocks,
+    split_oversized_section,
+    split_structured,
 )
+from app.rag.models import ManualDocument
 
 
 def test_parse_heading_blocks_recognizes_atx_headings():
@@ -56,6 +59,18 @@ def test_build_sections_skipped_level_attaches_to_nearest_ancestor():
     assert sections == [("# 教程\n### 发布", "内容。")]
 
 
+def test_build_sections_backtrack_drops_deeper_levels():
+    blocks = [
+        HeadingBlock(level=1, text="A"),
+        HeadingBlock(level=3, text="B"),
+        TextBlock("body1"),
+        HeadingBlock(level=2, text="C"),
+        TextBlock("body2"),
+    ]
+    sections = build_sections(blocks)
+    assert sections == [("# A\n### B", "body1"), ("# A\n## C", "body2")]
+
+
 def test_build_sections_no_headings_returns_single_empty_chain_section():
     sections = build_sections([TextBlock("纯文本内容。")])
     assert sections == [("", "纯文本内容。")]
@@ -65,9 +80,6 @@ def test_build_sections_preamble_before_first_heading_is_own_section():
     blocks = [TextBlock("文档开头。"), HeadingBlock(level=1, text="正文"), TextBlock("内容。")]
     sections = build_sections(blocks)
     assert sections == [("", "文档开头。"), ("# 正文", "内容。")]
-
-
-from app.rag.ingestion.structured_splitter import split_oversized_section
 
 
 def test_split_oversized_section_prefers_paragraph_boundaries():
@@ -91,10 +103,6 @@ def test_split_oversized_section_falls_back_to_character_split_for_long_paragrap
     pieces = split_oversized_section(body, chunk_size=30, chunk_overlap=5)
     assert pieces[0] == "X" * 30
     assert pieces[1].startswith("X" * 5)
-
-
-from app.rag.ingestion.structured_splitter import split_structured
-from app.rag.models import ManualDocument
 
 
 def test_split_structured_uses_section_boundaries():

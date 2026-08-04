@@ -81,7 +81,7 @@ def build_sections(blocks: list[Block]) -> list[tuple[str, str]]:
 
 
 def _split_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
-    """复用旧固定长度切分：段落内超长时的最终兜底。"""
+    """字符级固定长度切分，作为超长段落的兜底方案。"""
     if len(text) <= chunk_size:
         return [text]
     chunks: list[str] = []
