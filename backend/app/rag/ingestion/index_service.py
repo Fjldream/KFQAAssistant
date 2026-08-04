@@ -9,7 +9,7 @@ from app.rag.models import DocumentChunk, ManualDocument
 from app.rag.ingestion.splitter import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE, split_documents
 
 
-INDEX_PIPELINE_VERSION = 1
+INDEX_PIPELINE_VERSION = 2
 DEFAULT_EMBEDDING_MODEL_NAME = "BAAI/bge-small-zh-v1.5"
 
 

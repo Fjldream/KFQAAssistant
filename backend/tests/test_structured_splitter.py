@@ -149,3 +149,13 @@ def test_split_structured_attaches_images_by_markers():
     assert chunks[0].images == ["1.png"]
     assert chunks[1].images == ["2.png"]
     assert all("[[KF_IMAGE_" not in chunk.content for chunk in chunks)
+
+
+def test_split_structured_heading_only_document_produces_no_chunks():
+    doc = ManualDocument(
+        title="关于/空页",
+        source_path="关于/空页.md",
+        content="# 空标题",
+        images=[],
+    )
+    assert split_structured(doc, chunk_size=700, chunk_overlap=100) == []

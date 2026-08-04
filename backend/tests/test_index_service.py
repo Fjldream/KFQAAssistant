@@ -72,7 +72,7 @@ def make_paths(tmp_path: Path) -> tuple[Path, Path]:
 # 验证首次构建把全部手册视为新增，但不必调用全量 reset。
 def test_first_build_adds_all_documents_incrementally(tmp_path: Path):
     data_dir, manifest_path = make_paths(tmp_path)
-    (data_dir / "guide.md").write_text("# 指南", encoding="utf-8")
+    (data_dir / "guide.md").write_text("# 指南\n\n指南正文。", encoding="utf-8")
     store = FakeVectorStore()
 
     result = update_index(data_dir, manifest_path, store)
@@ -114,7 +114,7 @@ def test_unchanged_documents_skip_vector_writes(tmp_path: Path, monkeypatch):
         {"embedding_model_name": "new-embedding-model"},
         {"chunk_size": 350},
         {"chunk_overlap": 50},
-        {"pipeline_version": 2},
+        {"pipeline_version": 3},
     ],
 )
 def test_index_configuration_change_forces_full_rebuild(tmp_path: Path, changed_options: dict):
@@ -182,11 +182,11 @@ def test_invalid_chunk_settings_do_not_touch_index(
 # 验证新增文档只写入新来源，不重复处理旧来源。
 def test_added_document_only_writes_new_source(tmp_path: Path):
     data_dir, manifest_path = make_paths(tmp_path)
-    (data_dir / "first.md").write_text("# 第一篇", encoding="utf-8")
+    (data_dir / "first.md").write_text("# 第一篇\n\n第一篇正文。", encoding="utf-8")
     store = FakeVectorStore()
     update_index(data_dir, manifest_path, store)
     store.reset_events()
-    (data_dir / "second.md").write_text("# 第二篇", encoding="utf-8")
+    (data_dir / "second.md").write_text("# 第二篇\n\n第二篇正文。", encoding="utf-8")
 
     result = update_index(data_dir, manifest_path, store)
 
@@ -199,11 +199,11 @@ def test_added_document_only_writes_new_source(tmp_path: Path):
 def test_modified_document_replaces_only_its_chunks(tmp_path: Path):
     data_dir, manifest_path = make_paths(tmp_path)
     path = data_dir / "guide.md"
-    path.write_text("# 第一版", encoding="utf-8")
+    path.write_text("# 第一版\n\n第一版正文。", encoding="utf-8")
     store = FakeVectorStore()
     update_index(data_dir, manifest_path, store)
     store.reset_events()
-    path.write_text("# 第二版", encoding="utf-8")
+    path.write_text("# 第二版\n\n第二版正文。", encoding="utf-8")
 
     result = update_index(data_dir, manifest_path, store)
 
@@ -217,8 +217,8 @@ def test_modified_document_replaces_only_its_chunks(tmp_path: Path):
 def test_deleted_document_removes_its_chunks(tmp_path: Path):
     data_dir, manifest_path = make_paths(tmp_path)
     path = data_dir / "guide.md"
-    path.write_text("# 指南", encoding="utf-8")
-    (data_dir / "keep.md").write_text("# 保留文档", encoding="utf-8")
+    path.write_text("# 指南\n\n指南正文。", encoding="utf-8")
+    (data_dir / "keep.md").write_text("# 保留文档\n\n保留文档正文。", encoding="utf-8")
     store = FakeVectorStore()
     update_index(data_dir, manifest_path, store)
     store.reset_events()
@@ -278,7 +278,7 @@ def test_full_rebuild_recovers_corrupted_manifest(tmp_path: Path):
 # 验证全量写入失败后会留下恢复标记，使下次默认构建自动再次全量处理。
 def test_failed_full_rebuild_forces_next_run_to_recover(tmp_path: Path):
     data_dir, manifest_path = make_paths(tmp_path)
-    (data_dir / "guide.md").write_text("# 指南", encoding="utf-8")
+    (data_dir / "guide.md").write_text("# 指南\n\n指南正文。", encoding="utf-8")
     store = FakeVectorStore()
     update_index(data_dir, manifest_path, store)
     store.fail_rebuild = True
@@ -353,3 +353,11 @@ def test_empty_document_root_does_not_clear_existing_index(tmp_path: Path):
     assert store.count() == 2
     assert store.rebuild_calls == []
     assert not manifest_path.exists()
+
+
+# 验证默认流水线版本已提升（1→2）：默认签名必须与显式 v1 不同，旧清单才会被判定为过期触发全量重建。
+def test_index_signature_changes_with_pipeline_version():
+    assert index_service.INDEX_PIPELINE_VERSION == 2
+    v1 = index_service.build_index_signature("BAAI/bge-small-zh-v1.5", 700, 100, pipeline_version=1)
+    default = index_service.build_index_signature("BAAI/bge-small-zh-v1.5", 700, 100)
+    assert default != v1
