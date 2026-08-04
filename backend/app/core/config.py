@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-v4-flash"
     deepseek_timeout_seconds: int = 60
+    deepseek_judge_model: str = "deepseek-v4-pro"
+    deepseek_judge_timeout_seconds: int = 60
+    evaluation_semantic_enabled: bool = True
+    evaluation_metrics: str = "faithfulness"
 
     embedding_model_name: str = "BAAI/bge-small-zh-v1.5"
     chroma_persist_dir: Path = Path("storage/chroma")
