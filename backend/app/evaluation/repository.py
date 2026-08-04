@@ -90,6 +90,25 @@ class EvaluationRepository:
                 );
                 """
             )
+            # 旧库兼容：为早期创建的库补齐语义评估新列，不丢历史数据。
+            self._ensure_columns(connection)
+
+    # 旧库兼容：检测缺失的语义评估列并用 ALTER TABLE 补齐，避免历史数据丢失。
+    def _ensure_columns(self, connection: sqlite3.Connection) -> None:
+        turn_columns = {
+            "faithfulness_score": "REAL",
+            "faithfulness_claims_json": "TEXT",
+            "faithfulness_elapsed_ms": "REAL",
+        }
+        run_columns = {
+            "avg_faithfulness_score": "REAL",
+            "knowledge_base_id": "TEXT",
+        }
+        for table, columns in (("evaluation_turn_results", turn_columns), ("evaluation_runs", run_columns)):
+            existing = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+            for column, decl in columns.items():
+                if column not in existing:
+                    connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
     # 返回当前数据库中的表名，主要供测试和诊断使用。
     def list_table_names(self) -> list[str]:
@@ -138,8 +157,8 @@ class EvaluationRepository:
                 INSERT INTO evaluation_runs (
                     id, status, started_at, finished_at, case_total, case_passed, pass_rate,
                     p0_total, p0_passed, avg_latency_ms, p95_latency_ms, gate_passed,
-                    gate_reasons_json, config_json, error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    gate_reasons_json, config_json, error, avg_faithfulness_score, knowledge_base_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     summary.run_id,
@@ -157,6 +176,8 @@ class EvaluationRepository:
                     self._json(gate_result.reasons),
                     self._json(config or {}),
                     error,
+                    summary.avg_faithfulness_score,
+                    summary.knowledge_base_id,
                 ),
             )
             for case_result in case_results:
@@ -201,8 +222,9 @@ class EvaluationRepository:
                     passed, keyword_passed, source_passed, image_passed, no_answer_passed,
                     matched_keywords_json, missing_keywords_json, matched_source_keywords_json,
                     missing_source_keywords_json, forbidden_source_matches_json, sources_json,
-                    image_count, source_count, elapsed_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    image_count, source_count, elapsed_ms,
+                    faithfulness_score, faithfulness_claims_json, faithfulness_elapsed_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"turn-result-{uuid4().hex}",
@@ -226,6 +248,9 @@ class EvaluationRepository:
                     turn.image_count,
                     turn.source_count,
                     turn.elapsed_ms,
+                    turn.faithfulness_score,
+                    self._json(turn.faithfulness_claims),
+                    turn.faithfulness_elapsed_ms,
                 ),
             )
 
@@ -309,6 +334,8 @@ class EvaluationRepository:
             dialogue_total=int(breakdowns["dialogue_total"]),
             dialogue_passed=int(breakdowns["dialogue_passed"]),
             category_pass_rates=dict(breakdowns["category_pass_rates"]),
+            avg_faithfulness_score=row["avg_faithfulness_score"],
+            knowledge_base_id=row["knowledge_base_id"],
         )
 
     # 从数据库读取一个用例结果，并附带其所有轮次结果。
@@ -348,4 +375,7 @@ class EvaluationRepository:
             image_count=int(row["image_count"]),
             source_count=int(row["source_count"]),
             elapsed_ms=float(row["elapsed_ms"]),
+            faithfulness_score=row["faithfulness_score"],
+            faithfulness_claims=json.loads(row["faithfulness_claims_json"]) if row["faithfulness_claims_json"] else [],
+            faithfulness_elapsed_ms=float(row["faithfulness_elapsed_ms"] or 0.0),
         )
