@@ -51,3 +51,26 @@ def parse_heading_blocks(text: str) -> list[Block]:
             current.append(line)
     flush_text()
     return blocks
+
+
+def build_sections(blocks: list[Block]) -> list[tuple[str, str]]:
+    sections: list[tuple[str, str]] = []
+    chain: dict[int, str] = {}
+    current_chain = ""
+    current_body: list[str] = []
+
+    def flush() -> None:
+        if current_body:
+            sections.append((current_chain, "\n".join(current_body).strip()))
+        current_body.clear()
+
+    for block in blocks:
+        if isinstance(block, TextBlock):
+            current_body.append(block.text)
+            continue
+        flush()
+        chain = {level: text for level, text in chain.items() if level < block.level}
+        chain[block.level] = block.text
+        current_chain = "\n".join(f"{'#' * level} {text}" for level, text in sorted(chain.items()))
+    flush()
+    return sections
