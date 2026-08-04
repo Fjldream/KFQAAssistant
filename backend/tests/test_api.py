@@ -484,8 +484,10 @@ def test_chat_rejects_empty_question():
 
 def test_chat_uses_rag_chain(monkeypatch):
     class FakeChain:
-        def answer(self, question: str):
+        def answer(self, question: str, conversation_summary="", conversation_turn_count=0, recent_messages=None):
             assert question == "页面编辑器有哪些区域？"
+            assert conversation_summary == ""
+            assert recent_messages == []
             return ChatResponse(
                 answer="页面编辑器包括菜单栏、工具栏、工具箱和配置窗。",
                 sources=[
@@ -512,11 +514,55 @@ def test_chat_uses_rag_chain(monkeypatch):
     assert response.json()["sources"][0]["images"] == ["页面编辑器/1.png"]
 
 
+def test_chat_endpoint_forwards_conversation_context(monkeypatch):
+    import app.api.routes_chat as routes_chat
+
+    class FakeChain:
+        def __init__(self) -> None:
+            self.kwargs = {}
+
+        def answer(self, question, conversation_summary="", conversation_turn_count=0, recent_messages=None):
+            self.kwargs = {
+                "question": question,
+                "conversation_summary": conversation_summary,
+                "conversation_turn_count": conversation_turn_count,
+                "recent_messages": recent_messages,
+            }
+            return ChatResponse(
+                answer="回答",
+                sources=[],
+                conversation_summary="新摘要",
+                standalone_question="采集工程创建完成后如何运行？",
+            )
+
+    fake_chain = FakeChain()
+    monkeypatch.setattr(routes_chat, "create_rag_chain", lambda: fake_chain)
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/api/chat",
+        json={
+            "question": "那怎么运行？",
+            "conversation_summary": "旧摘要",
+            "conversation_turn_count": 2,
+            "recent_messages": [{"role": "user", "content": "如何创建采集工程？"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["conversation_summary"] == "新摘要"
+    assert response.json()["standalone_question"] == "采集工程创建完成后如何运行？"
+    assert fake_chain.kwargs["question"] == "那怎么运行？"
+    assert fake_chain.kwargs["conversation_summary"] == "旧摘要"
+    assert fake_chain.kwargs["conversation_turn_count"] == 2
+    assert fake_chain.kwargs["recent_messages"][0].content == "如何创建采集工程？"
+
+
 # 验证 RAG 可预期异常会返回友好的 503，而不是把 Python 内部错误暴露给前端。
 def test_chat_returns_service_unavailable_for_rag_error(monkeypatch):
     class FakeChain:
         # 模拟向量库为空时 Chain 抛出的业务异常。
-        def answer(self, question: str):
+        def answer(self, question: str, conversation_summary="", conversation_turn_count=0, recent_messages=None):
             raise IndexNotReadyError()
 
     import app.api.routes_chat as routes_chat
@@ -533,7 +579,7 @@ def test_chat_returns_service_unavailable_for_rag_error(monkeypatch):
 # 验证问答接口会记录耗时、来源数和图片数等可观测指标。
 def test_chat_logs_observable_metrics(monkeypatch, caplog):
     class FakeChain:
-        def answer(self, question: str):
+        def answer(self, question: str, conversation_summary="", conversation_turn_count=0, recent_messages=None):
             return ChatResponse(
                 answer="页面编辑器包括菜单栏、工具栏、工具箱和配置窗。",
                 sources=[
@@ -562,3 +608,63 @@ def test_chat_logs_observable_metrics(monkeypatch, caplog):
     assert "source_count=1" in log_text
     assert "image_count=2" in log_text
     assert "elapsed_ms=" in log_text
+
+
+def test_chat_stream_emits_sse_events(monkeypatch):
+    import app.api.routes_chat as routes_chat
+
+    class FakeChain:
+        def answer_stream(self, question, conversation_summary="", conversation_turn_count=0, recent_messages=None):
+            assert question == "如何创建采集工程？"
+            assert conversation_summary == ""
+            assert recent_messages == []
+            yield {"type": "chunk", "content": "点击"}
+            yield {"type": "chunk", "content": "新建工程。"}
+            yield {
+                "type": "sources",
+                "sources": [
+                    {
+                        "title": "采集工程",
+                        "source_path": "a.md",
+                        "snippet": "点击新建。",
+                        "evidence_ids": ["资料 1"],
+                        "images": [],
+                        "score": 0.9,
+                    }
+                ],
+            }
+            yield {"type": "done", "conversation_summary": "新摘要", "standalone_question": "如何创建采集工程？"}
+
+    monkeypatch.setattr(routes_chat, "create_rag_chain", lambda: FakeChain())
+    client = TestClient(create_app())
+
+    response = client.post("/api/chat/stream", json={"question": "如何创建采集工程？"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    body = response.text
+    assert '"type": "chunk"' in body
+    assert '"content": "点击"' in body
+    assert '"type": "sources"' in body
+    assert '"type": "done"' in body
+    assert '"conversation_summary": "新摘要"' in body
+    assert "[DONE]" in body
+
+
+def test_chat_stream_reports_error_event(monkeypatch):
+    import app.api.routes_chat as routes_chat
+
+    class FakeChain:
+        def answer_stream(self, *args, **kwargs):
+            raise RuntimeError("boom")
+            yield
+
+    monkeypatch.setattr(routes_chat, "create_rag_chain", lambda: FakeChain())
+    client = TestClient(create_app())
+
+    response = client.post("/api/chat/stream", json={"question": "问题"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert '"type": "error"' in body
+    assert "服务暂时不可用" in body

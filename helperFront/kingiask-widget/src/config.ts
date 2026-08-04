@@ -12,6 +12,8 @@ export const DEFAULT_CONFIG: ResolvedKingIAskWidgetConfig = {
   position: 'right-bottom',
   timeoutMs: 60000,
   persistSession: true,
+  accentColor: '',
+  suggestedQuestions: [],
 };
 
 // 合并默认配置、全局配置和 init 入参，得到插件运行时使用的最终配置。
@@ -33,5 +35,9 @@ export function resolveConfig(
       merged.position === 'left-bottom' ? 'left-bottom' : 'right-bottom',
     timeoutMs: Number(merged.timeoutMs || DEFAULT_CONFIG.timeoutMs),
     persistSession: merged.persistSession !== false,
+    accentColor: String(merged.accentColor ?? '').trim(),
+    suggestedQuestions: Array.isArray(merged.suggestedQuestions)
+      ? merged.suggestedQuestions.map(String).filter(Boolean).slice(0, 4)
+      : [],
   };
 }

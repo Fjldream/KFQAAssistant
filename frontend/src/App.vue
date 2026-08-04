@@ -16,6 +16,7 @@
         @ask="handleAsk"
         @open-settings="settingsOpen = true"
         @clear-history="history.clearQuestions"
+        @remove-recent-question="history.removeQuestion"
         @new-session="sessions.createNewSession"
         @switch-session="sessions.switchSession"
         @delete-session="sessions.deleteSession"

@@ -52,6 +52,9 @@ def create_rag_chain() -> RagChain:
         llm=llm,
         max_images_per_source=settings.max_images_per_source,
         max_images_per_answer=settings.max_images_per_answer,
+        enable_conversation_rewrite=settings.enable_conversation_rewrite,
+        enable_conversation_summary=settings.enable_conversation_summary,
+        conversation_summary_every_n_turns=settings.conversation_summary_every_n_turns,
     )
 
 

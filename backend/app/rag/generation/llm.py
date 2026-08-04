@@ -1,3 +1,6 @@
+import json
+from collections.abc import Iterator
+
 import httpx
 
 from app.rag.errors import LLMGenerationError
@@ -45,4 +48,39 @@ class DeepSeekClient:
                 data = response.json()
             return data["choices"][0]["message"]["content"].strip()
         except (httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
+            raise LLMGenerationError() from exc
+
+    # 流式调用 DeepSeek chat completions，逐段产出回答文本，供 SSE 接口边生成边推送。
+    def generate_stream(self, question: str, contexts: list[str]) -> Iterator[str]:
+        context_text = "\n\n---\n\n".join(contexts)
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"问题：{question}\n\n{ANSWER_REQUIREMENTS}\n\n手册片段：\n{context_text}"},
+            ],
+            "temperature": 0.2,
+            "stream": True,
+        }
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        try:
+            with httpx.Client(timeout=self.timeout_seconds, trust_env=False) as client:
+                with client.stream(
+                    "POST", f"{self.base_url}/chat/completions", json=payload, headers=headers
+                ) as response:
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if not line or not line.startswith("data:"):
+                            continue
+                        data = line[len("data:"):].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        delta = chunk["choices"][0].get("delta", {}).get("content")
+                        if delta:
+                            yield delta
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise LLMGenerationError() from exc

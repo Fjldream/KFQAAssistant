@@ -9,6 +9,10 @@ export type KingIAskWidgetConfig = {
   position?: WidgetPosition;
   timeoutMs?: number;
   persistSession?: boolean;
+  /** 品牌主色，例如 "#0071e3"，会覆盖默认 Apple 蓝。 */
+  accentColor?: string;
+  /** 欢迎页推荐问题，最多展示 4 个。 */
+  suggestedQuestions?: string[];
 };
 
 export type ResolvedKingIAskWidgetConfig = Required<KingIAskWidgetConfig>;
@@ -22,9 +26,18 @@ export type SourceSnippet = {
   score: number | null;
 };
 
+export type ChatRole = "user" | "assistant";
+
+export type ChatHistoryMessage = {
+  role: ChatRole;
+  content: string;
+};
+
 export type ChatResponse = {
   answer: string;
   sources: SourceSnippet[];
+  conversation_summary?: string;
+  standalone_question?: string;
 };
 
 export type KingIAskWidgetApi = {

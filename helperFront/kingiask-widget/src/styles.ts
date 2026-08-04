@@ -78,32 +78,55 @@ export const WIDGET_STYLES = `
 .kiw-root.left-bottom { left: 24px; }
 
 .kiw-launcher {
-  display: inline-flex; align-items: center; gap: 12px; min-width: 172px; height: 56px;
-  border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 999px; padding: 8px 18px 8px 8px;
+  position: relative;
+  display: grid; place-items: center;
+  width: 52px; height: 52px; padding: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
   background: linear-gradient(135deg, var(--kiw-accent) 0%, #5ac8fa 100%);
-  color: var(--kiw-on-accent); cursor: pointer;
-  box-shadow: 0 14px 34px var(--kiw-accent-ring), 0 2px 0 rgba(255, 255, 255, 0.22) inset;
-  transition: transform 180ms var(--kiw-ease-out), box-shadow 180ms ease, background 180ms ease;
+  cursor: pointer;
+  box-shadow:
+    0 12px 26px var(--kiw-accent-ring),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.08);
+  transition:
+    transform 180ms var(--kiw-ease-out),
+    box-shadow 180ms ease;
 }
-.kiw-launcher:hover { transform: translateY(-2px); box-shadow: 0 18px 44px var(--kiw-accent-ring), 0 2px 0 rgba(255, 255, 255, 0.22) inset; }
-.kiw-launcher:active { transform: scale(0.96); transition-duration: 100ms; }
+.kiw-launcher:hover {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow:
+    0 16px 36px var(--kiw-accent-ring),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.08);
+}
+.kiw-launcher:active { transform: scale(0.94); transition-duration: 100ms; }
 
 .kiw-launcher-mark, .kiw-brand-mark {
-  display: grid; place-items: center; width: 40px; height: 40px;
-  border-radius: 14px; background: rgba(255, 255, 255, 0.24); color: var(--kiw-on-accent);
-  font-weight: 850; font-size: 18px; letter-spacing: -0.02em;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  display: grid; place-items: center;
 }
-.kiw-launcher-copy { display: grid; gap: 2px; text-align: left; }
-.kiw-launcher-title { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.15; }
+/* 图标放在白色圆底上，与渐变背景干净分层，避免同色系糊在一起 */
+.kiw-launcher-mark {
+  width: 38px; height: 38px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 -2px 6px rgba(0, 0, 0, 0.06);
+  padding: 6px;
+}
+.kiw-brand-mark {
+  width: 42px; height: 42px; border-radius: 15px;
+}
+.kiw-launcher-mark .kiw-logo, .kiw-brand-mark .kiw-logo {
+  display: block; width: 100%; height: 100%; object-fit: contain;
+}
+
+/* 在线状态角标：右下角绿点 */
 .kiw-launcher-status {
-  position: relative; padding-left: 10px; color: rgba(255, 255, 255, 0.82);
-  font-size: 11.5px; font-weight: 550; line-height: 1.2;
-}
-.kiw-launcher-status::before {
-  content: ""; position: absolute; left: 0; top: 50%; width: 6px; height: 6px;
-  border-radius: 999px; background: #34c759; transform: translateY(-50%);
-  box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.28);
+  position: absolute; right: 3px; bottom: 3px;
+  width: 13px; height: 13px; border-radius: 999px;
+  background: #34c759;
+  border: 2.5px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.25);
 }
 
 /* —— 面板 —— */
@@ -130,8 +153,6 @@ export const WIDGET_STYLES = `
 .kiw-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .kiw-brand-mark {
   flex: 0 0 auto; width: 42px; height: 42px; border-radius: 15px;
-  background: linear-gradient(135deg, var(--kiw-accent) 0%, #5ac8fa 100%);
-  box-shadow: 0 6px 16px var(--kiw-accent-ring);
 }
 .kiw-title { margin: 0; color: var(--kiw-text); font-size: 16px; font-weight: 800; letter-spacing: -0.015em; line-height: 1.2; }
 .kiw-subtitle { margin: 3px 0 0; color: var(--kiw-text-secondary); font-size: 12px; line-height: 1.35; }
@@ -272,6 +293,114 @@ export const WIDGET_STYLES = `
   outline: 3px solid var(--kiw-accent-ring); outline-offset: 2px;
 }
 
+/* —— 消息操作与证据锚定 —— */
+.kiw-message-actions {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;
+}
+.kiw-copy {
+  display: inline-flex; align-items: center; min-height: 28px; border-radius: 999px;
+  border: 1px solid var(--kiw-border); background: var(--kiw-surface-muted);
+  color: var(--kiw-text-secondary); padding: 0 12px; cursor: pointer;
+  font-size: 12px; font-weight: 700;
+  transition: background 150ms ease, color 150ms ease, transform 150ms var(--kiw-ease-out);
+}
+.kiw-copy:hover { background: var(--kiw-surface-muted); color: var(--kiw-text); }
+.kiw-copy:active { transform: scale(0.95); }
+.kiw-anchor {
+  color: var(--kiw-accent); font-weight: 700; text-decoration: none; cursor: pointer;
+}
+.kiw-anchor:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* —— 资料来源锚定滚动与高亮 —— */
+.kiw-source { scroll-margin: 14px; }
+.kiw-source-flash {
+  animation: kiw-source-flash 1.6s ease-out;
+}
+@keyframes kiw-source-flash {
+  0% { border-color: var(--kiw-accent); background: var(--kiw-accent-soft); }
+  100% { border-color: var(--kiw-border); background: var(--kiw-surface-muted); }
+}
+
+/* —— 图片缩略图 —— */
+.kiw-thumb {
+  display: inline-flex; align-items: center; gap: 8px; width: fit-content; margin-top: 4px;
+  border: 1px solid var(--kiw-border); border-radius: 12px; background: var(--kiw-surface-solid);
+  padding: 4px 10px 4px 4px; cursor: pointer;
+  transition: border-color 150ms ease, transform 150ms var(--kiw-ease-out);
+}
+.kiw-thumb:hover { border-color: var(--kiw-accent-ring); }
+.kiw-thumb:active { transform: scale(0.97); }
+.kiw-thumb img {
+  width: 44px; height: 44px; object-fit: cover; border-radius: 9px;
+  background: var(--kiw-surface-muted);
+}
+.kiw-thumb-label {
+  color: var(--kiw-accent); font-size: 12px; font-weight: 700;
+}
+
+/* —— 清空会话 —— */
+.kiw-header-actions { display: flex; align-items: center; gap: 8px; }
+.kiw-clear {
+  display: inline-flex; align-items: center; min-height: 30px; border-radius: 999px;
+  border: 1px solid var(--kiw-border); background: var(--kiw-surface-muted);
+  color: var(--kiw-text-secondary); padding: 0 12px; cursor: pointer;
+  font-size: 12px; font-weight: 700;
+  transition: background 150ms ease, color 150ms ease, transform 150ms var(--kiw-ease-out);
+}
+.kiw-clear:hover { background: var(--kiw-red-soft); color: var(--kiw-red); border-color: transparent; }
+.kiw-clear:active { transform: scale(0.95); }
+
+/* —— 推荐问题 —— */
+.kiw-suggestions {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px;
+}
+.kiw-suggestion {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: 1px solid var(--kiw-border); border-radius: 12px; background: var(--kiw-surface-muted);
+  color: var(--kiw-text-secondary); padding: 9px 11px; cursor: pointer;
+  font-size: 12px; font-weight: 650; text-align: left;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms var(--kiw-ease-out);
+}
+.kiw-suggestion:hover { border-color: var(--kiw-accent-ring); background: var(--kiw-accent-soft); color: var(--kiw-accent); }
+.kiw-suggestion:active { transform: scale(0.97); }
+
+/* —— 图片灯箱 —— */
+.kiw-lightbox {
+  position: fixed; inset: 0; z-index: 10; display: none;
+  align-items: center; justify-content: center; padding: 24px;
+}
+.kiw-lightbox.open { display: flex; animation: kiw-lightbox-in 200ms ease both; }
+.kiw-lightbox-backdrop {
+  position: absolute; inset: 0; background: rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%);
+}
+.kiw-lightbox-body {
+  position: relative; max-width: min(880px, 92vw); max-height: 88vh; margin: 0;
+  border-radius: 18px; overflow: hidden;
+  background: var(--kiw-surface-solid); box-shadow: var(--kiw-shadow-pop);
+  animation: kiw-msg-in 240ms var(--kiw-ease-out) both;
+}
+.kiw-lightbox-img {
+  display: block; max-width: 100%; max-height: 82vh; object-fit: contain;
+}
+.kiw-lightbox-caption {
+  padding: 10px 14px; color: var(--kiw-text-secondary); font-size: 12px;
+  overflow-wrap: anywhere; border-top: 1px solid var(--kiw-border);
+}
+.kiw-lightbox-close {
+  position: absolute; top: 10px; right: 10px; z-index: 1;
+  display: grid; place-items: center; width: 32px; height: 32px;
+  border-radius: 999px; background: rgba(255, 255, 255, 0.85);
+  color: #1d1d1f; cursor: pointer; font-size: 18px; line-height: 1;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  transition: transform 150ms var(--kiw-ease-out);
+}
+.kiw-lightbox-close:active { transform: scale(0.9); }
+@keyframes kiw-lightbox-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* —— 动画 —— */
 @keyframes kiw-panel-in {
   from { opacity: 0; transform: translateY(14px) scale(0.97); }
@@ -290,13 +419,19 @@ export const WIDGET_STYLES = `
 @media (max-width: 520px) {
   .kiw-root { right: 14px; bottom: 14px; left: 14px; }
   .kiw-root.left-bottom { left: 14px; }
-  .kiw-launcher { min-width: 0; width: 100%; justify-content: center; }
+  .kiw-launcher { width: 48px; height: 48px; padding: 6px; }
+  .kiw-launcher-mark { width: 36px; height: 36px; padding: 5px; }
   .kiw-panel { width: 100%; height: min(620px, calc(100vh - 28px)); border-radius: 22px; }
+  .kiw-suggestions { grid-template-columns: 1fr; }
+  .kiw-lightbox { padding: 12px; }
+  .kiw-lightbox-body { max-height: 90vh; border-radius: 14px; }
+  .kiw-lightbox-img { max-height: 84vh; }
 }
 
 /* —— 减少动效 —— */
 @media (prefers-reduced-motion: reduce) {
   .kiw-panel.open, .kiw-message, .kiw-error, .kiw-loading,
-  .kiw-loading-dots span { animation: none; }
+  .kiw-loading-dots span, .kiw-source-flash, .kiw-lightbox.open,
+  .kiw-lightbox-body { animation: none; }
 }
 `;

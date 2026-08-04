@@ -78,6 +78,34 @@ describe("ChatWorkspace", () => {
     expect(wrapper.find(".ka-source-chip").text()).toContain("资料 1");
   });
 
+  it("流式进行中的助手消息显示打字光标而非 Markdown", () => {
+    const streamingMessages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "user",
+        content: "问题",
+        sources: [],
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "2",
+        role: "assistant",
+        content: "正在生成**回答**",
+        sources: [],
+        createdAt: "2026-01-01T00:00:01.000Z",
+        streaming: true,
+      },
+    ];
+    const wrapper = mount(ChatWorkspace, {
+      props: { messages: streamingMessages, isAsking: true, errorMessage: null, commonQuestions: [] },
+    });
+    // 流式期间按纯文本展示（不渲染 <strong>），并出现打字光标。
+    expect(wrapper.findAll(".ka-msg__bubble")[1].html()).toContain("正在生成**回答**");
+    expect(wrapper.find(".ka-stream-cursor").exists()).toBe(true);
+    // 已有流式占位消息时不再叠加"正在思考"气泡。
+    expect(wrapper.findAll(".ka-msg").length).toBe(2);
+  });
+
   it("清空按钮触发 clear 事件", async () => {
     const wrapper = mount(ChatWorkspace, {
       props: { messages: [], isAsking: false, errorMessage: null, commonQuestions: [] },

@@ -9,6 +9,8 @@ const DEFAULT_TITLE = "新会话";
 export interface SessionsHandle {
   activeId: Ref<string>;
   activeMessages: Ref<ChatMessage[]>;
+  activeConversationSummary: Readonly<Ref<string>>;
+  updateActiveConversationSummary: (summary: string) => void;
   clearActiveSession: () => void;
   touchActive: () => void;
 }
@@ -25,6 +27,7 @@ function createSession(title = DEFAULT_TITLE): ChatSession {
     title,
     createdAt: now,
     updatedAt: now,
+    conversationSummary: "",
     messages: [],
   };
 }
@@ -51,7 +54,12 @@ function loadSessions(): ChatSession[] {
       (item): item is ChatSession =>
         Boolean(item && typeof item === "object" && "id" in item && Array.isArray((item as ChatSession).messages)),
     );
-    return valid.length > 0 ? valid.slice(0, MAX_SESSIONS) : [createSession()];
+    return valid.length > 0
+      ? valid.slice(0, MAX_SESSIONS).map((session) => ({
+          ...session,
+          conversationSummary: session.conversationSummary ?? "",
+        }))
+      : [createSession()];
   } catch {
     return [createSession()];
   }
@@ -77,6 +85,7 @@ export function useSessions() {
   const activeSession = computed<ChatSession | null>(
     () => sessions.value.find((s) => s.id === activeId.value) ?? null,
   );
+  const activeConversationSummary = computed(() => activeSession.value?.conversationSummary ?? "");
 
   // 深层监听会话变化并持久化，切换会话后由 UI 主动调用 touch 更新排序。
   watch(sessions, (next) => saveSessions(next), { deep: true });
@@ -115,7 +124,17 @@ export function useSessions() {
 
   function clearActiveSession(): void {
     activeMessages.value.splice(0, activeMessages.value.length);
+    updateActiveConversationSummary("");
     touchActive();
+  }
+
+  // 更新当前会话摘要，供下一轮连续追问时发送给后端。
+  function updateActiveConversationSummary(summary: string): void {
+    const session = activeSession.value;
+    if (!session) {
+      return;
+    }
+    session.conversationSummary = summary;
   }
 
   // 会话有内容变化时更新 updatedAt，用于列表排序（最近在最前）。
@@ -140,10 +159,12 @@ export function useSessions() {
     activeId,
     activeSession,
     activeMessages,
+    activeConversationSummary,
     switchSession,
     createNewSession,
     deleteSession,
     clearActiveSession,
+    updateActiveConversationSummary,
     touchActive,
   };
 }

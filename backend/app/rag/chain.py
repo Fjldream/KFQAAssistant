@@ -1,10 +1,13 @@
 import re
+from collections.abc import Iterator
 from typing import Protocol
 
+from app.rag.conversation.rewriter import rewrite_standalone_question
+from app.rag.conversation.summarizer import summarize_conversation
 from app.rag.generation.answer_policy import NO_ANSWER_MESSAGE, is_missing_required_terms, is_no_answer, normalize_answer
 from app.rag.generation.context_builder import build_context_blocks, format_context_blocks
 from app.rag.retrieval.retriever import RetrievedChunk
-from app.schemas.chat import ChatResponse, SourceSnippet
+from app.schemas.chat import ChatHistoryMessage, ChatResponse, SourceSnippet
 
 
 # 定义 RAG Chain 需要的检索器接口，让 Chain 不依赖具体向量库实现。
@@ -76,6 +79,23 @@ def _ensure_answer_citations(answer: str, evidence_count: int) -> str:
     return f"{answer}\n\n参考：{references}"
 
 
+# 判断本轮是否需要更新摘要，用降频减少辅助模型调用。
+def _should_update_conversation_summary(
+    conversation_summary: str,
+    conversation_turn_count: int,
+    every_n_turns: int,
+    has_conversation_context: bool,
+    enabled: bool,
+) -> bool:
+    if not enabled or not has_conversation_context:
+        return False
+    if not conversation_summary.strip():
+        return True
+    if every_n_turns <= 1:
+        return True
+    return conversation_turn_count > 0 and conversation_turn_count % every_n_turns == 0
+
+
 # 串联检索器和大模型，把用户问题转换成带来源的问答响应。
 class RagChain:
     # 注入检索器和 LLM，便于测试时使用假对象，生产时使用真实服务。
@@ -85,28 +105,174 @@ class RagChain:
         llm: LLMProtocol,
         max_images_per_source: int = 5,
         max_images_per_answer: int = 8,
+        enable_conversation_rewrite: bool = True,
+        enable_conversation_summary: bool = True,
+        conversation_summary_every_n_turns: int = 3,
     ) -> None:
         self.retriever = retriever
         self.llm = llm
         self.max_images_per_source = max_images_per_source
         self.max_images_per_answer = max_images_per_answer
+        self.enable_conversation_rewrite = enable_conversation_rewrite
+        self.enable_conversation_summary = enable_conversation_summary
+        self.conversation_summary_every_n_turns = conversation_summary_every_n_turns
 
-    # 执行完整 RAG 问答流程：检索资料、生成回答、整理来源和图片。
-    def answer(self, question: str) -> ChatResponse:
-        retrieved = self.retriever.retrieve(question)
+    # 执行完整 RAG 问答流程：处理连续对话、检索资料、生成回答、整理来源和图片。
+    def answer(
+        self,
+        question: str,
+        conversation_summary: str = "",
+        conversation_turn_count: int = 0,
+        recent_messages: list[ChatHistoryMessage] | None = None,
+    ) -> ChatResponse:
+        messages = recent_messages or []
+        has_conversation_context = bool(conversation_summary.strip() or messages)
+        standalone_question = rewrite_standalone_question(
+            llm=self.llm,
+            question=question,
+            conversation_summary=conversation_summary,
+            recent_messages=messages,
+            enabled=self.enable_conversation_rewrite,
+        )
+
+        retrieved = self.retriever.retrieve(standalone_question)
         if not retrieved:
-            return ChatResponse(answer=NO_ANSWER_MESSAGE, sources=[])
+            return ChatResponse(
+                answer=NO_ANSWER_MESSAGE,
+                sources=[],
+                conversation_summary=conversation_summary,
+                standalone_question=standalone_question,
+            )
 
         contexts = _build_contexts(retrieved)
-        if is_missing_required_terms(question=question, contexts=contexts):
-            return ChatResponse(answer=NO_ANSWER_MESSAGE, sources=[])
+        if is_missing_required_terms(question=standalone_question, contexts=contexts):
+            return ChatResponse(
+                answer=NO_ANSWER_MESSAGE,
+                sources=[],
+                conversation_summary=conversation_summary,
+                standalone_question=standalone_question,
+            )
 
-        answer = normalize_answer(self.llm.generate(question=question, contexts=contexts))
+        answer = normalize_answer(self.llm.generate(question=standalone_question, contexts=contexts))
         if is_no_answer(answer):
-            return ChatResponse(answer=answer, sources=[])
+            return ChatResponse(
+                answer=answer,
+                sources=[],
+                conversation_summary=conversation_summary,
+                standalone_question=standalone_question,
+            )
 
         answer = _ensure_answer_citations(answer, len(retrieved))
+        should_update_summary = _should_update_conversation_summary(
+            conversation_summary=conversation_summary,
+            conversation_turn_count=conversation_turn_count,
+            every_n_turns=self.conversation_summary_every_n_turns,
+            has_conversation_context=has_conversation_context,
+            enabled=self.enable_conversation_summary,
+        )
+        updated_summary = (
+            summarize_conversation(
+                llm=self.llm,
+                previous_summary=conversation_summary,
+                recent_messages=messages,
+                question=question,
+                answer=answer,
+            )
+            if should_update_summary
+            else conversation_summary
+        )
         return ChatResponse(
             answer=answer,
             sources=_build_sources(retrieved, self.max_images_per_source, self.max_images_per_answer),
+            conversation_summary=updated_summary,
+            standalone_question=standalone_question,
         )
+
+    # 流式执行完整 RAG 问答流程：改写、检索、边生成边产出片段，最后返回来源和摘要。
+    # 产出的事件为 dict，由路由层序列化为 SSE data 行，前端按 type 消费。
+    def answer_stream(
+        self,
+        question: str,
+        conversation_summary: str = "",
+        conversation_turn_count: int = 0,
+        recent_messages: list[ChatHistoryMessage] | None = None,
+    ) -> Iterator[dict[str, object]]:
+        messages = recent_messages or []
+        has_conversation_context = bool(conversation_summary.strip() or messages)
+        standalone_question = rewrite_standalone_question(
+            llm=self.llm,
+            question=question,
+            conversation_summary=conversation_summary,
+            recent_messages=messages,
+            enabled=self.enable_conversation_rewrite,
+        )
+
+        retrieved = self.retriever.retrieve(standalone_question)
+        if not retrieved:
+            yield {"type": "answer", "content": NO_ANSWER_MESSAGE}
+            yield {
+                "type": "done",
+                "conversation_summary": conversation_summary,
+                "standalone_question": standalone_question,
+            }
+            return
+
+        contexts = _build_contexts(retrieved)
+        if is_missing_required_terms(question=standalone_question, contexts=contexts):
+            yield {"type": "answer", "content": NO_ANSWER_MESSAGE}
+            yield {
+                "type": "done",
+                "conversation_summary": conversation_summary,
+                "standalone_question": standalone_question,
+            }
+            return
+
+        # 边生成边推送回答片段；生成完成后统一做归一化、引用补全和摘要。
+        streamed: list[str] = []
+        for piece in self.llm.generate_stream(question=standalone_question, contexts=contexts):
+            streamed.append(piece)
+            yield {"type": "chunk", "content": piece}
+
+        answer = normalize_answer("".join(streamed))
+        if is_no_answer(answer):
+            # 拒答文本已随 chunk 完整推送，无需再发 answer 事件。
+            yield {
+                "type": "done",
+                "conversation_summary": conversation_summary,
+                "standalone_question": standalone_question,
+            }
+            return
+
+        answer = _ensure_answer_citations(answer, len(retrieved))
+        should_update_summary = _should_update_conversation_summary(
+            conversation_summary=conversation_summary,
+            conversation_turn_count=conversation_turn_count,
+            every_n_turns=self.conversation_summary_every_n_turns,
+            has_conversation_context=has_conversation_context,
+            enabled=self.enable_conversation_summary,
+        )
+        updated_summary = (
+            summarize_conversation(
+                llm=self.llm,
+                previous_summary=conversation_summary,
+                recent_messages=messages,
+                question=question,
+                answer=answer,
+            )
+            if should_update_summary
+            else conversation_summary
+        )
+        yield {
+            "type": "sources",
+            "sources": [
+                source.model_dump()
+                for source in _build_sources(
+                    retrieved, self.max_images_per_source, self.max_images_per_answer
+                )
+            ],
+        }
+        yield {
+            "type": "done",
+            "conversation_summary": updated_summary,
+            "standalone_question": standalone_question,
+        }

@@ -65,3 +65,63 @@ describe("createApiClient", () => {
     expect((error as ApiError).detail).toBe("服务暂不可用");
   });
 });
+
+describe("chatStream", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("解析 SSE 事件并按序触发回调", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        const events = [
+          'data: {"type":"chunk","content":"点击"}\n\n',
+          'data: {"type":"chunk","content":"新建。"}\n\n',
+          'data: {"type":"sources","sources":[{"title":"采集工程"}]}\n\n',
+          'data: {"type":"done","conversation_summary":"新摘要","standalone_question":"如何运行？"}\n\n',
+          "data: [DONE]\n\n",
+        ];
+        events.forEach((event) => controller.enqueue(encoder.encode(event)));
+        controller.close();
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}), body: stream }),
+    );
+
+    const chunks: string[] = [];
+    const callbacks = {
+      onChunk: (content: string) => chunks.push(content),
+      onSources: vi.fn(),
+      onDone: vi.fn(),
+    };
+    const client = createApiClient({ apiBaseUrl: "http://127.0.0.1:8000", apiKey: "" });
+    await client.chatStream({ question: "问题" }, callbacks);
+
+    expect(chunks).toEqual(["点击", "新建。"]);
+    expect(callbacks.onSources).toHaveBeenCalledWith([{ title: "采集工程" }]);
+    expect(callbacks.onDone).toHaveBeenCalledWith("新摘要", "如何运行？");
+  });
+
+  it("服务端 error 事件抛出自定义错误", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"error","message":"服务暂时不可用"}\n\n'));
+        controller.close();
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}), body: stream }),
+    );
+
+    const callbacks = { onChunk: () => {}, onSources: () => {}, onDone: () => {} };
+    const client = createApiClient({ apiBaseUrl: "http://127.0.0.1:8000", apiKey: "" });
+    await expect(client.chatStream({ question: "问题" }, callbacks)).rejects.toMatchObject({
+      detail: "服务暂时不可用",
+    });
+  });
+});

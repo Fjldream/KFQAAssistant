@@ -9,6 +9,7 @@ const sessions: ChatSession[] = [
     title: "会话A",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
+    conversationSummary: "",
     messages: [],
   },
   {
@@ -16,6 +17,7 @@ const sessions: ChatSession[] = [
     title: "会话B",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
+    conversationSummary: "",
     messages: [],
   },
 ];
@@ -99,5 +101,25 @@ describe("SidebarPanel", () => {
     expect(clearButton).toBeDefined();
     await clearButton!.trigger("click");
     expect(wrapper.emitted("clearHistory")).toBeTruthy();
+  });
+
+  it("点击删除按钮移除单条最近提问，且不触发 ask", async () => {
+    const wrapper = mount(SidebarPanel, { props: baseProps });
+    const removeButtons = wrapper.findAll('[data-testid="remove-recent"]');
+    expect(removeButtons.length).toBe(1);
+    await removeButtons[0].trigger("click");
+    expect(wrapper.emitted("removeRecentQuestion")?.[0]).toEqual(["最近问题1"]);
+    expect(wrapper.emitted("ask")).toBeUndefined();
+  });
+
+  it("过长的文本带 title 悬浮提示", () => {
+    const longQuestion = "这是一段非常非常长的最近提问，用来验证省略号与悬浮提示的完整内容展示效果";
+    const wrapper = mount(SidebarPanel, {
+      props: { ...baseProps, recentQuestions: [longQuestion], commonQuestions: [longQuestion] },
+    });
+    const recentText = wrapper.find('[data-testid="recent-list"] .ka-list-item__text');
+    expect(recentText.attributes("title")).toBe(longQuestion);
+    const commonText = wrapper.find('[data-testid="common-question"] .ka-list-item__text');
+    expect(commonText.attributes("title")).toBe(longQuestion);
   });
 });

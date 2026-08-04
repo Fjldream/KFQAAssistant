@@ -2,7 +2,9 @@
   <div class="ka-sidebar">
     <header class="ka-sidebar__head">
       <div class="ka-brand">
-        <div class="ka-brand__mark" aria-hidden="true">K</div>
+        <div class="ka-brand__mark" aria-hidden="true">
+          <LogoIcon :size="27" />
+        </div>
         <div>
           <p class="ka-brand__name">KingIAsk</p>
           <p class="ka-brand__sub">KF 产品知识问答助手</p>
@@ -50,7 +52,7 @@
               @click="emit('switchSession', session.id)"
             >
               <MessageSquare :size="15" class="ka-list-item__icon" aria-hidden="true" />
-              <span class="ka-list-item__text">{{ session.title }}</span>
+              <span class="ka-list-item__text" :title="session.title">{{ session.title }}</span>
             </button>
             <button
               class="ka-session__del"
@@ -77,7 +79,7 @@
             @click="emit('ask', question)"
           >
             <Sparkles :size="15" class="ka-list-item__icon" aria-hidden="true" />
-            <span class="ka-list-item__text">{{ question }}</span>
+            <span class="ka-list-item__text" :title="question">{{ question }}</span>
           </button>
         </div>
       </section>
@@ -87,18 +89,24 @@
           <p class="ka-eyebrow">最近提问</p>
           <button class="ka-section__action" type="button" @click="emit('clearHistory')">清空</button>
         </div>
-        <p v-if="recentQuestions.length === 0" class="ka-empty">暂无最近提问</p>
+        <p v-if="recentQuestions.length === 0" class="ka-empty">暂无最近提问（提问成功后显示，可单条删除）</p>
         <div v-else class="ka-list" data-testid="recent-list">
-          <button
-            v-for="question in recentQuestions"
-            :key="question"
-            class="ka-list-item"
-            type="button"
-            @click="emit('ask', question)"
-          >
-            <Clock :size="15" class="ka-list-item__icon" aria-hidden="true" />
-            <span class="ka-list-item__text">{{ question }}</span>
-          </button>
+          <div v-for="question in recentQuestions" :key="question" class="ka-session">
+            <button class="ka-session__main" type="button" @click="emit('ask', question)">
+              <Clock :size="15" class="ka-list-item__icon" aria-hidden="true" />
+              <span class="ka-list-item__text" :title="question">{{ question }}</span>
+            </button>
+            <button
+              class="ka-session__del"
+              type="button"
+              data-testid="remove-recent"
+              :aria-label="`删除最近提问 ${question}`"
+              title="删除该提问"
+              @click="emit('removeRecentQuestion', question)"
+            >
+              <X :size="14" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </section>
     </div>
@@ -106,8 +114,9 @@
 </template>
 
 <script setup lang="ts">
-import { Clock, MessageSquare, Settings, Sparkles, X } from "lucide-vue-next";
+import { Clock, MessageSquare, Settings, X } from "lucide-vue-next";
 import type { ChatSession } from "../api/types";
+import LogoIcon from "./LogoIcon.vue";
 
 defineProps<{
   healthLabel: string;
@@ -127,6 +136,7 @@ const emit = defineEmits<{
   ask: [question: string];
   openSettings: [];
   clearHistory: [];
+  removeRecentQuestion: [question: string];
   newSession: [];
   switchSession: [id: string];
   deleteSession: [id: string];

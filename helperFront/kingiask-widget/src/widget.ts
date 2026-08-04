@@ -1,6 +1,6 @@
-import { askKingIAsk, buildManualImageUrl, buildManualPageUrl } from "./api";
+import { askKingIAskStream, buildManualImageUrl, buildManualPageUrl } from "./api";
 import { WIDGET_STYLES } from "./styles";
-import type { ChatResponse, ResolvedKingIAskWidgetConfig, SourceSnippet } from "./types";
+import type { ChatHistoryMessage, ChatResponse, ResolvedKingIAskWidgetConfig, SourceSnippet } from "./types";
 
 type WidgetInstance = {
   destroy: () => void;
@@ -10,8 +10,16 @@ type StoredMessage =
   | { role: "user"; text: string }
   | { role: "assistant"; response: ChatResponse };
 
+type StoredConversation = {
+  messages: StoredMessage[];
+  conversationSummary: string;
+};
+
 const SESSION_STORAGE_KEY = "kingiask-widget:conversation:v1";
 const MAX_STORED_MESSAGES = 40;
+
+// 品牌 LOGO：企业 OEM 标志图片（运营平台提供），用于浮动入口与面板头部。
+const LOGO_IMG = `<img class="kiw-logo" src="https://192.168.3.32/opscenter/oemImg/leftIcon.png" alt="KingIAsk 标志" />`;
 
 // 创建 HTML 元素并设置文本内容，避免把模型回答直接作为 HTML 注入。
 function textElement<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text: string): HTMLElementTagNameMap[K] {
@@ -21,44 +29,83 @@ function textElement<K extends keyof HTMLElementTagNameMap>(tag: K, className: s
   return element;
 }
 
-// 从当前标签页的 sessionStorage 中读取历史会话，页面跳转后可以恢复上下文。
-function loadStoredMessages(config: ResolvedKingIAskWidgetConfig): StoredMessage[] {
+// 判断 sessionStorage 中的一条历史消息结构是否可用于恢复。
+function isStoredMessage(message: unknown): message is StoredMessage {
+  if (!message || typeof message !== "object") {
+    return false;
+  }
+  const candidate = message as StoredMessage;
+  if (candidate.role === "user") {
+    return typeof candidate.text === "string";
+  }
+  if (candidate.role === "assistant") {
+    return typeof candidate.response?.answer === "string" && Array.isArray(candidate.response?.sources);
+  }
+  return false;
+}
+
+// 从当前标签页的 sessionStorage 中读取历史会话和摘要，页面跳转后可以恢复上下文。
+function loadStoredConversation(config: ResolvedKingIAskWidgetConfig): StoredConversation {
+  const emptyConversation = { messages: [], conversationSummary: "" };
   if (!config.persistSession) {
-    return [];
+    return emptyConversation;
   }
   try {
     const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) {
-      return [];
+      return emptyConversation;
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
+    if (Array.isArray(parsed)) {
+      return { messages: parsed.filter(isStoredMessage), conversationSummary: "" };
     }
-    return parsed.filter((message): message is StoredMessage => {
-      if (message?.role === "user") {
-        return typeof message.text === "string";
-      }
-      if (message?.role === "assistant") {
-        return typeof message.response?.answer === "string" && Array.isArray(message.response?.sources);
-      }
-      return false;
-    });
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.messages)) {
+      return emptyConversation;
+    }
+    return {
+      messages: parsed.messages.filter(isStoredMessage),
+      conversationSummary: typeof parsed.conversationSummary === "string" ? parsed.conversationSummary : "",
+    };
   } catch {
-    return [];
+    return emptyConversation;
   }
 }
 
-// 将历史会话写入 sessionStorage；写入失败时静默降级为不持久化。
-function saveStoredMessages(config: ResolvedKingIAskWidgetConfig, storedMessages: StoredMessage[]): void {
+// 将历史会话和摘要写入 sessionStorage；写入失败时静默降级为不持久化。
+function saveStoredConversation(
+  config: ResolvedKingIAskWidgetConfig,
+  storedMessages: StoredMessage[],
+  conversationSummary: string,
+): void {
   if (!config.persistSession) {
     return;
   }
   try {
-    window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(storedMessages.slice(-MAX_STORED_MESSAGES)));
+    window.sessionStorage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({
+        messages: storedMessages.slice(-MAX_STORED_MESSAGES),
+        conversationSummary,
+      }),
+    );
   } catch {
     // 浏览器隐私模式或存储空间不足时，不影响问答主流程。
   }
+}
+
+// 将插件本地消息裁剪为最近 4 轮，发送给后端理解追问。
+function buildRecentMessages(messages: StoredMessage[]): ChatHistoryMessage[] {
+  return messages.slice(-8).map((message) => {
+    if (message.role === "user") {
+      return { role: "user", content: message.text };
+    }
+    return { role: "assistant", content: message.response.answer };
+  });
+}
+
+// 统计插件本次提问前已有几轮用户提问，用于后端控制摘要更新频率。
+function countConversationTurns(messages: StoredMessage[]): number {
+  return messages.filter((message) => message.role === "user").length;
 }
 
 // 渲染用户消息，供新提问和历史恢复复用。
@@ -95,11 +142,63 @@ function getReadableSnippet(source: SourceSnippet): string {
     .trim();
 }
 
-// 根据来源资料生成展示节点，包含标题、路径、片段和图片入口。
-function renderSource(config: ResolvedKingIAskWidgetConfig, source: SourceSnippet): HTMLElement {
+// 把回答文本中的 [资料 N] 转成锚定链接（仅当对应资料卡存在时），其余内容保持纯文本。
+function renderAnswerText(answer: string, sourceCount: number): HTMLElement {
+  const container = document.createElement("div");
+  container.className = "kiw-answer-text";
+  const parts = answer.split(/(\[资料\s*\d+\])/g);
+  parts.forEach((part) => {
+    const match = part.match(/^\[资料\s*(\d+)\]$/);
+    if (match) {
+      const num = Number(match[1]);
+      if (num >= 1 && num <= sourceCount) {
+        const anchor = document.createElement("a");
+        anchor.className = "kiw-anchor";
+        anchor.href = `#kiw-source-${num}`;
+        anchor.dataset.target = `kiw-source-${num}`;
+        anchor.textContent = part;
+        container.appendChild(anchor);
+        return;
+      }
+    }
+    container.appendChild(document.createTextNode(part));
+  });
+  return container;
+}
+
+// 创建复制回答按钮，点击后把回答写入剪贴板并短暂反馈。
+function createCopyButton(answer: string): HTMLButtonElement {
+  const copyButton = document.createElement("button");
+  copyButton.className = "kiw-copy";
+  copyButton.type = "button";
+  copyButton.textContent = "复制";
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard
+      ?.writeText(answer)
+      .then(() => {
+        copyButton.textContent = "已复制";
+      })
+      .catch(() => {
+        copyButton.textContent = "复制失败";
+      });
+    window.setTimeout(() => {
+      copyButton.textContent = "复制";
+    }, 1600);
+  });
+  return copyButton;
+}
+
+// 根据来源资料生成展示节点，包含标题、路径、片段和图片缩略图预览。
+function renderSource(
+  config: ResolvedKingIAskWidgetConfig,
+  source: SourceSnippet,
+  index: number,
+  openImage: (url: string) => void,
+): HTMLElement {
   const pageUrl = buildManualPageUrl(source.source_path);
   const wrapper = document.createElement("div");
   wrapper.className = "kiw-source";
+  wrapper.id = `kiw-source-${index + 1}`;
   if (pageUrl) {
     wrapper.classList.add("kiw-source-link");
   }
@@ -126,31 +225,49 @@ function renderSource(config: ResolvedKingIAskWidgetConfig, source: SourceSnippe
     pageLink.textContent = "查看原文";
     wrapper.appendChild(pageLink);
   }
-  source.images.slice(0, 3).forEach((image, index) => {
-    const link = document.createElement("a");
-    link.className = "kiw-source-image";
-    link.href = buildManualImageUrl(config, image);
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = `相关图片 ${index + 1}`;
-    wrapper.appendChild(link);
+  source.images.slice(0, 3).forEach((image) => {
+    const url = buildManualImageUrl(config, image);
+    const thumb = document.createElement("button");
+    thumb.className = "kiw-thumb";
+    thumb.type = "button";
+    thumb.title = image.split("/").pop() ?? "相关图片";
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = image.split("/").pop() ?? "相关图片";
+    img.loading = "lazy";
+    img.addEventListener("error", () => img.remove());
+    thumb.appendChild(img);
+    thumb.appendChild(textElement("span", "kiw-thumb-label", "查看图片"));
+    thumb.addEventListener("click", () => openImage(url));
+    wrapper.appendChild(thumb);
   });
   return wrapper;
 }
 
-// 把 RAG 返回结果渲染到消息区。
-function renderAnswer(config: ResolvedKingIAskWidgetConfig, messages: HTMLElement, response: ChatResponse): void {
+// 把 RAG 返回结果渲染到消息区，包含锚定资料、复制按钮和图片预览入口。
+function renderAnswer(
+  config: ResolvedKingIAskWidgetConfig,
+  messages: HTMLElement,
+  response: ChatResponse,
+  openImage: (url: string) => void,
+): void {
   const answer = document.createElement("article");
   answer.className = "kiw-message kiw-message-assistant";
   answer.appendChild(textElement("div", "kiw-message-label", "KingIAsk"));
-  answer.appendChild(textElement("div", "kiw-answer-text", response.answer));
+  answer.appendChild(renderAnswerText(response.answer, response.sources.length));
   if (response.sources.length > 0) {
     const sources = document.createElement("section");
     sources.className = "kiw-sources";
     sources.appendChild(textElement("div", "kiw-sources-heading", "资料来源"));
-    response.sources.slice(0, 3).forEach((source) => sources.appendChild(renderSource(config, source)));
+    response.sources.slice(0, 3).forEach((source, index) =>
+      sources.appendChild(renderSource(config, source, index, openImage)),
+    );
     answer.appendChild(sources);
   }
+  const actions = document.createElement("div");
+  actions.className = "kiw-message-actions";
+  actions.appendChild(createCopyButton(response.answer));
+  answer.appendChild(actions);
   messages.appendChild(answer);
   messages.scrollTop = messages.scrollHeight;
 }
@@ -169,7 +286,7 @@ function renderLoading(): HTMLElement {
   return loading;
 }
 
-// 创建 KingIAsk 浮动助手 DOM，并绑定打开、发送和销毁逻辑。
+// 创建 KingIAsk 浮动助手 DOM，并绑定打开、发送、预览和销毁逻辑。
 export function createKingIAskWidget(config: ResolvedKingIAskWidgetConfig): WidgetInstance | null {
   if (!config.enabled) {
     return null;
@@ -177,6 +294,10 @@ export function createKingIAskWidget(config: ResolvedKingIAskWidgetConfig): Widg
 
   const host = document.createElement("div");
   host.setAttribute("data-kingiask-widget-root", "true");
+  // 自定义品牌主色：通过 CSS 变量覆盖默认 Apple 蓝，同时作用于浅色/深色模式。
+  if (config.accentColor) {
+    host.style.setProperty("--kiw-accent", config.accentColor);
+  }
   const shadow = host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
   style.textContent = WIDGET_STYLES;
@@ -189,13 +310,11 @@ export function createKingIAskWidget(config: ResolvedKingIAskWidgetConfig): Widg
   launcher.dataset.role = "launcher";
   launcher.setAttribute("aria-label", `打开 ${config.title} 助手`);
   launcher.innerHTML = `
-    <span class="kiw-launcher-mark" aria-hidden="true">K</span>
-    <span class="kiw-launcher-copy">
-      <span class="kiw-launcher-title"></span>
-      <span class="kiw-launcher-status">助手在线</span>
-    </span>
+    <span class="kiw-launcher-mark" aria-hidden="true">${LOGO_IMG}</span>
+    <span class="kiw-launcher-status" aria-hidden="true"></span>
   `;
-  launcher.querySelector(".kiw-launcher-title")!.textContent = config.title;
+  // 悬浮提示：显示助手名称与在线状态（原生 tooltip）。
+  launcher.title = `${config.title} · 助手在线`;
 
   const panel = document.createElement("section");
   panel.className = "kiw-panel";
@@ -205,13 +324,16 @@ export function createKingIAskWidget(config: ResolvedKingIAskWidgetConfig): Widg
   panel.innerHTML = `
     <header class="kiw-header">
       <div class="kiw-brand">
-        <span class="kiw-brand-mark" aria-hidden="true">K</span>
+        <span class="kiw-brand-mark" aria-hidden="true">${LOGO_IMG}</span>
         <div>
           <h2 class="kiw-title" id="kiw-title"></h2>
           <p class="kiw-subtitle">企业知识问答助手 · 助手在线</p>
         </div>
       </div>
-      <button class="kiw-close" type="button" aria-label="关闭 KingIAsk">×</button>
+      <div class="kiw-header-actions">
+        <button class="kiw-clear" type="button" title="清空会话" aria-label="清空会话">清空</button>
+        <button class="kiw-close" type="button" aria-label="关闭 KingIAsk">×</button>
+      </div>
     </header>
     <div class="kiw-messages"></div>
     <form class="kiw-form">
@@ -225,17 +347,62 @@ export function createKingIAskWidget(config: ResolvedKingIAskWidgetConfig): Widg
   const messages = panel.querySelector(".kiw-messages") as HTMLElement;
   const textarea = panel.querySelector("[data-role='question']") as HTMLTextAreaElement;
   const sendButton = panel.querySelector("[data-role='send']") as HTMLButtonElement;
-  const storedMessages = loadStoredMessages(config);
+  const storedConversation = loadStoredConversation(config);
+  const storedMessages = storedConversation.messages;
+  let conversationSummary = storedConversation.conversationSummary;
+  // 图片灯箱：全屏遮罩预览资料截图，支持遮罩点击与关闭按钮。
+  // 需在渲染历史消息前创建，供 renderAnswer 的缩略图回调引用。
+  const lightbox = document.createElement("div");
+  lightbox.className = "kiw-lightbox";
+  lightbox.innerHTML = `
+    <div class="kiw-lightbox-backdrop" data-role="lightbox-close"></div>
+    <figure class="kiw-lightbox-body">
+      <button class="kiw-lightbox-close" type="button" aria-label="关闭图片预览">×</button>
+      <img class="kiw-lightbox-img" alt="资料图片预览" />
+      <figcaption class="kiw-lightbox-caption"></figcaption>
+    </figure>
+  `;
+  const lightboxImg = lightbox.querySelector(".kiw-lightbox-img") as HTMLImageElement;
+  let lightboxOpen = false;
+  const openImage = (url: string) => {
+    lightboxImg.src = url;
+    lightbox.querySelector(".kiw-lightbox-caption")!.textContent = url.split("/").pop() ?? "";
+    lightbox.classList.add("open");
+    lightboxOpen = true;
+  };
+  const closeLightbox = () => {
+    lightbox.classList.remove("open");
+    lightboxImg.src = "";
+    lightboxOpen = false;
+  };
+  lightbox.querySelector('[data-role="lightbox-close"]')?.addEventListener("click", closeLightbox);
+  lightbox.querySelector(".kiw-lightbox-close")?.addEventListener("click", closeLightbox);
+  panel.appendChild(lightbox);
+
   const welcome = document.createElement("article");
   welcome.className = "kiw-message kiw-message-assistant";
   welcome.appendChild(textElement("div", "kiw-message-label", "KingIAsk"));
   welcome.appendChild(textElement("div", "kiw-answer-text", config.welcomeText));
+  // 欢迎页推荐问题：点击直接发送，降低首次提问门槛。
+  if (config.suggestedQuestions.length > 0) {
+    const suggestions = document.createElement("div");
+    suggestions.className = "kiw-suggestions";
+    config.suggestedQuestions.forEach((question) => {
+      const button = document.createElement("button");
+      button.className = "kiw-suggestion";
+      button.type = "button";
+      button.textContent = question;
+      button.addEventListener("click", () => void submitQuestion(question));
+      suggestions.appendChild(button);
+    });
+    welcome.appendChild(suggestions);
+  }
   messages.appendChild(welcome);
   storedMessages.forEach((message) => {
     if (message.role === "user") {
       renderUserMessage(messages, message.text);
     } else {
-      renderAnswer(config, messages, message.response);
+      renderAnswer(config, messages, message.response, openImage);
     }
   });
 
@@ -252,9 +419,14 @@ export function createKingIAskWidget(config: ResolvedKingIAskWidgetConfig): Widg
     launcher.style.display = "";
     window.removeEventListener("keydown", onKeydown);
   };
-  // 面板打开时按 Escape 快速关闭。
+  // Escape 优先关闭图片灯箱，其次关闭面板。
   const onKeydown = (event: KeyboardEvent) => {
-    if (event.key === "Escape") {
+    if (event.key !== "Escape") {
+      return;
+    }
+    if (lightboxOpen) {
+      closeLightbox();
+    } else {
       closePanel();
     }
   };
@@ -263,24 +435,77 @@ export function createKingIAskWidget(config: ResolvedKingIAskWidgetConfig): Widg
     sendButton.disabled = loading;
     sendButton.textContent = loading ? "处理中" : "发送";
   };
-  const submitQuestion = async () => {
-    const question = textarea.value.trim();
+  const submitQuestion = async (prefilled?: string) => {
+    const question = (prefilled ?? textarea.value).trim();
     if (!question) return;
-    textarea.value = "";
+    const recentMessages = buildRecentMessages(storedMessages);
+    const conversationTurnCount = countConversationTurns(storedMessages);
+    if (!prefilled) {
+      textarea.value = "";
+    }
     renderUserMessage(messages, question);
     storedMessages.push({ role: "user", text: question });
-    saveStoredMessages(config, storedMessages);
-    const loading = renderLoading();
-    messages.appendChild(loading);
+    saveStoredConversation(config, storedMessages, conversationSummary);
     setLoading(true);
+
+    // 创建流式回答气泡：先显示检索状态，收到第一个片段后逐字追加。
+    const answer = document.createElement("article");
+    answer.className = "kiw-message kiw-message-assistant";
+    answer.appendChild(textElement("div", "kiw-message-label", "KingIAsk"));
+    const answerText = document.createElement("div");
+    answerText.className = "kiw-answer-text";
+    answer.appendChild(answerText);
+    const loading = renderLoading();
+    answer.appendChild(loading);
+    messages.appendChild(answer);
+    messages.scrollTop = messages.scrollHeight;
+
+    let streamed = "";
+    let sources: SourceSnippet[] = [];
     try {
-      const response = await askKingIAsk(config, question);
-      loading.remove();
-      renderAnswer(config, messages, response);
-      storedMessages.push({ role: "assistant", response });
-      saveStoredMessages(config, storedMessages);
+      await askKingIAskStream(
+        config,
+        question,
+        conversationSummary,
+        recentMessages,
+        conversationTurnCount,
+        {
+          onChunk: (content) => {
+            loading.remove();
+            streamed += content;
+            answerText.textContent = streamed;
+            messages.scrollTop = messages.scrollHeight;
+          },
+          onSources: (nextSources) => {
+            sources = nextSources;
+          },
+          onDone: (nextSummary) => {
+            conversationSummary = nextSummary;
+          },
+        },
+      );
+
+      // 流结束：重建锚定文本，并渲染来源与复制按钮。
+      answerText.replaceWith(renderAnswerText(streamed, sources.length));
+      if (sources.length > 0) {
+        const sourcesSection = document.createElement("section");
+        sourcesSection.className = "kiw-sources";
+        sourcesSection.appendChild(textElement("div", "kiw-sources-heading", "资料来源"));
+        sources.slice(0, 3).forEach((source, index) =>
+          sourcesSection.appendChild(renderSource(config, source, index, openImage)),
+        );
+        answer.appendChild(sourcesSection);
+      }
+      const actions = document.createElement("div");
+      actions.className = "kiw-message-actions";
+      actions.appendChild(createCopyButton(streamed));
+      answer.appendChild(actions);
+
+      storedMessages.push({ role: "assistant", response: { answer: streamed, sources } });
+      saveStoredConversation(config, storedMessages, conversationSummary);
     } catch (error) {
       loading.remove();
+      answer.remove();
       const message = error instanceof Error ? error.message : "助手暂时不可用，请稍后再试。";
       messages.appendChild(textElement("div", "kiw-error", message));
     } finally {
@@ -290,6 +515,17 @@ export function createKingIAskWidget(config: ResolvedKingIAskWidgetConfig): Widg
 
   launcher.addEventListener("click", openPanel);
   panel.querySelector(".kiw-close")?.addEventListener("click", closePanel);
+  panel.querySelector(".kiw-clear")?.addEventListener("click", () => {
+    storedMessages.length = 0;
+    conversationSummary = "";
+    saveStoredConversation(config, storedMessages, conversationSummary);
+    [...messages.children].forEach((child) => {
+      if (child !== welcome) {
+        child.remove();
+      }
+    });
+    textarea.focus();
+  });
   panel.querySelector("form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     void submitQuestion();
@@ -299,6 +535,22 @@ export function createKingIAskWidget(config: ResolvedKingIAskWidgetConfig): Widg
       event.preventDefault();
       void submitQuestion();
     }
+  });
+  // 回答中的 [资料 N] 锚定：点击滚动到对应资料卡并短暂高亮。
+  messages.addEventListener("click", (event) => {
+    const anchor = (event.target as HTMLElement).closest("a.kiw-anchor") as HTMLAnchorElement | null;
+    if (!anchor) {
+      return;
+    }
+    event.preventDefault();
+    const targetId = anchor.dataset.target ?? "";
+    const sourceEl = targetId ? messages.querySelector(`#${CSS.escape(targetId)}`) : null;
+    if (!sourceEl) {
+      return;
+    }
+    sourceEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    sourceEl.classList.add("kiw-source-flash");
+    window.setTimeout(() => sourceEl.classList.remove("kiw-source-flash"), 1600);
   });
 
   root.append(launcher, panel);

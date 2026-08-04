@@ -1,6 +1,7 @@
 from app.rag.chain import RagChain
 from app.rag.models import DocumentChunk
 from app.rag.retrieval.retriever import RetrievedChunk
+from app.schemas.chat import ChatHistoryMessage
 
 
 class FakeRetriever:
@@ -127,6 +128,44 @@ class CountingLLM:
         return "这里是模型回答。"
 
 
+class RecordingRetriever:
+    def __init__(self) -> None:
+        self.queries: list[str] = []
+
+    def retrieve(self, query: str):
+        self.queries.append(query)
+        return FakeRetriever().retrieve(query)
+
+
+class ConversationAwareLLM:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, list[str]]] = []
+
+    def generate(self, question: str, contexts: list[str]) -> str:
+        self.calls.append((question, contexts))
+        if "改写成一个独立" in contexts[0]:
+            return "采集工程创建完成后如何运行？"
+        if "请更新 KF 产品问答会话摘要" in contexts[0]:
+            return "用户正在了解采集工程创建和运行。"
+        return "创建完成后，发布并启动采集工程。[资料 1]"
+
+
+class RecordingConversationLLM:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def generate(self, question: str, contexts: list[str]) -> str:
+        context = contexts[0]
+        if "改写成一个独立" in context:
+            self.calls.append("rewrite")
+            return "采集工程创建完成后如何运行？"
+        if "请更新 KF 产品问答会话摘要" in context:
+            self.calls.append("summary")
+            return "用户正在了解采集工程创建和运行。"
+        self.calls.append("answer")
+        return "创建完成后，发布并启动采集工程。[资料 1]"
+
+
 def test_rag_chain_returns_answer_sources_and_images():
     chain = RagChain(retriever=FakeRetriever(), llm=FakeLLM())
 
@@ -213,3 +252,137 @@ def test_rag_chain_limits_total_images_per_answer_without_dropping_sources():
     assert [source.source_path for source in response.sources] == ["来源一.md", "来源二.md"]
     assert response.sources[0].images == ["来源一/1.png", "来源一/2.png"]
     assert response.sources[1].images == ["来源二/1.png"]
+
+
+def test_rag_chain_rewrites_contextual_question_before_retrieval():
+    retriever = RecordingRetriever()
+    llm = ConversationAwareLLM()
+    chain = RagChain(retriever=retriever, llm=llm)
+
+    response = chain.answer(
+        "那创建完成后怎么运行？",
+        conversation_summary="用户正在了解采集工程创建流程。",
+        conversation_turn_count=3,
+        recent_messages=[ChatHistoryMessage(role="user", content="如何创建采集工程？")],
+    )
+
+    assert retriever.queries == ["采集工程创建完成后如何运行？"]
+    assert response.standalone_question == "采集工程创建完成后如何运行？"
+    assert response.conversation_summary == "用户正在了解采集工程创建和运行。"
+    assert "发布并启动采集工程" in response.answer
+
+
+def test_rag_chain_skips_rewrite_for_complete_question_with_history():
+    retriever = RecordingRetriever()
+    llm = RecordingConversationLLM()
+    chain = RagChain(retriever=retriever, llm=llm)
+
+    response = chain.answer(
+        "如何创建采集工程？",
+        conversation_summary="用户正在了解采集工程创建流程。",
+        recent_messages=[ChatHistoryMessage(role="user", content="页面编辑器有哪些区域？")],
+    )
+
+    assert retriever.queries == ["如何创建采集工程？"]
+    assert response.standalone_question == "如何创建采集工程？"
+    assert "rewrite" not in llm.calls
+
+
+def test_rag_chain_can_disable_conversation_rewrite():
+    retriever = RecordingRetriever()
+    llm = RecordingConversationLLM()
+    chain = RagChain(retriever=retriever, llm=llm, enable_conversation_rewrite=False)
+
+    response = chain.answer(
+        "那创建完成后怎么运行？",
+        conversation_summary="用户正在了解采集工程创建流程。",
+        recent_messages=[ChatHistoryMessage(role="user", content="如何创建采集工程？")],
+    )
+
+    assert retriever.queries == ["那创建完成后怎么运行？"]
+    assert response.standalone_question == "那创建完成后怎么运行？"
+    assert "rewrite" not in llm.calls
+
+
+def test_rag_chain_updates_summary_on_configured_turn_interval():
+    llm = RecordingConversationLLM()
+    chain = RagChain(
+        retriever=RecordingRetriever(),
+        llm=llm,
+        conversation_summary_every_n_turns=3,
+    )
+
+    response = chain.answer(
+        "那怎么运行？",
+        conversation_summary="旧摘要",
+        conversation_turn_count=3,
+        recent_messages=[ChatHistoryMessage(role="user", content="如何创建采集工程？")],
+    )
+
+    assert "summary" in llm.calls
+    assert response.conversation_summary == "用户正在了解采集工程创建和运行。"
+
+
+def test_rag_chain_reuses_summary_between_configured_turn_intervals():
+    llm = RecordingConversationLLM()
+    chain = RagChain(
+        retriever=RecordingRetriever(),
+        llm=llm,
+        conversation_summary_every_n_turns=3,
+    )
+
+    response = chain.answer(
+        "那怎么运行？",
+        conversation_summary="旧摘要",
+        conversation_turn_count=2,
+        recent_messages=[ChatHistoryMessage(role="user", content="如何创建采集工程？")],
+    )
+
+    assert "summary" not in llm.calls
+    assert response.conversation_summary == "旧摘要"
+
+
+def test_rag_chain_creates_summary_when_current_summary_is_empty():
+    llm = RecordingConversationLLM()
+    chain = RagChain(
+        retriever=RecordingRetriever(),
+        llm=llm,
+        conversation_summary_every_n_turns=3,
+    )
+
+    response = chain.answer(
+        "那怎么运行？",
+        conversation_summary="",
+        conversation_turn_count=2,
+        recent_messages=[ChatHistoryMessage(role="user", content="如何创建采集工程？")],
+    )
+
+    assert "summary" in llm.calls
+    assert response.conversation_summary == "用户正在了解采集工程创建和运行。"
+
+
+def test_rag_chain_can_disable_conversation_summary():
+    llm = RecordingConversationLLM()
+    chain = RagChain(retriever=RecordingRetriever(), llm=llm, enable_conversation_summary=False)
+
+    response = chain.answer(
+        "那怎么运行？",
+        conversation_summary="旧摘要",
+        conversation_turn_count=3,
+        recent_messages=[ChatHistoryMessage(role="user", content="如何创建采集工程？")],
+    )
+
+    assert "summary" not in llm.calls
+    assert response.conversation_summary == "旧摘要"
+
+
+def test_rag_chain_keeps_single_turn_behavior_without_history():
+    retriever = RecordingRetriever()
+    llm = FakeCitedLLM()
+    chain = RagChain(retriever=retriever, llm=llm)
+
+    response = chain.answer("页面编辑器有哪些区域？")
+
+    assert retriever.queries == ["页面编辑器有哪些区域？"]
+    assert response.standalone_question == "页面编辑器有哪些区域？"
+    assert response.conversation_summary == ""

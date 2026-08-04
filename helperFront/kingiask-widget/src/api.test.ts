@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ResolvedKingIAskWidgetConfig } from "./types";
-import { askKingIAsk, buildManualImageUrl, buildManualPageUrl } from "./api";
+import { askKingIAsk, askKingIAskStream, buildManualImageUrl, buildManualPageUrl } from "./api";
 
 const baseConfig: ResolvedKingIAskWidgetConfig = {
   enabled: true,
@@ -9,7 +9,10 @@ const baseConfig: ResolvedKingIAskWidgetConfig = {
   title: "KingIAsk",
   welcomeText: "欢迎",
   position: "right-bottom",
-  timeoutMs: 5000
+  timeoutMs: 5000,
+  persistSession: true,
+  accentColor: "",
+  suggestedQuestions: []
 };
 
 describe("askKingIAsk", () => {
@@ -38,6 +41,23 @@ describe("askKingIAsk", () => {
     const headers = fetchMock.mock.calls[0][1].headers as Headers;
     expect(headers.get("Content-Type")).toBe("application/json");
     expect(headers.get("X-API-Key")).toBe("test-key");
+  });
+
+  it("sends conversation summary and recent messages", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ answer: "回答", sources: [], conversation_summary: "新摘要" })
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await askKingIAsk(baseConfig, "那怎么运行？", "旧摘要", [{ role: "user", content: "如何创建采集工程？" }], 1);
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+      question: "那怎么运行？",
+      conversation_summary: "旧摘要",
+      conversation_turn_count: 1,
+      recent_messages: [{ role: "user", content: "如何创建采集工程？" }]
+    });
   });
 
   it("throws a friendly auth error for 401 or 403", async () => {
@@ -131,5 +151,57 @@ describe("buildManualPageUrl", () => {
 
   it("returns null for non-markdown paths", () => {
     expect(buildManualPageUrl("helperFront/入门指南/image/1.png")).toBeNull();
+  });
+});
+
+describe("askKingIAskStream", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("parses SSE events and invokes callbacks in order", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        const events = [
+          'data: {"type":"chunk","content":"点击"}\n\n',
+          'data: {"type":"chunk","content":"新建。"}\n\n',
+          'data: {"type":"sources","sources":[{"title":"采集工程"}]}\n\n',
+          'data: {"type":"done","conversation_summary":"新摘要","standalone_question":"如何运行？"}\n\n',
+          "data: [DONE]\n\n"
+        ];
+        events.forEach((event) => controller.enqueue(encoder.encode(event)));
+        controller.close();
+      }
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, body: stream }));
+
+    const chunks: string[] = [];
+    const callbacks = {
+      onChunk: (content: string) => chunks.push(content),
+      onSources: vi.fn(),
+      onDone: vi.fn()
+    };
+    await askKingIAskStream(baseConfig, "问题", "", [], 0, callbacks);
+
+    expect(chunks).toEqual(["点击", "新建。"]);
+    expect(callbacks.onSources).toHaveBeenCalledWith([{ title: "采集工程" }]);
+    expect(callbacks.onDone).toHaveBeenCalledWith("新摘要", "如何运行？");
+  });
+
+  it("throws a friendly error when the server emits an error event", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"error","message":"服务暂时不可用"}\n\n'));
+        controller.close();
+      }
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, body: stream }));
+
+    const callbacks = { onChunk: () => {}, onSources: () => {}, onDone: () => {} };
+    await expect(askKingIAskStream(baseConfig, "问题", "", [], 0, callbacks)).rejects.toThrow(
+      "服务暂时不可用"
+    );
   });
 });

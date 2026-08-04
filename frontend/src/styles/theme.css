@@ -375,12 +375,7 @@ textarea:focus-visible {
   flex: 0 0 auto;
   place-items: center;
   border-radius: 11px;
-  background: linear-gradient(135deg, #0071e3 0%, #5ac8fa 55%, #64d2ff 100%);
-  color: #ffffff;
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  box-shadow: 0 4px 12px var(--ka-accent-ring);
+  filter: drop-shadow(0 4px 10px var(--ka-accent-ring));
 }
 
 .ka-brand__name {
@@ -402,6 +397,7 @@ textarea:focus-visible {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 2px 4px 8px;
 }
 
@@ -665,7 +661,7 @@ textarea:focus-visible {
   margin-right: 4px;
   border-radius: 8px;
   color: var(--ka-text-tertiary);
-  opacity: 0;
+  opacity: 0.55;
   transition:
     opacity 140ms ease,
     background-color 140ms ease,
@@ -744,17 +740,12 @@ textarea:focus-visible {
 
 .ka-welcome__mark {
   display: grid;
-  width: 64px;
-  height: 64px;
+  width: 68px;
+  height: 68px;
   place-items: center;
   margin-bottom: 26px;
-  border-radius: 19px;
-  background: linear-gradient(135deg, #0071e3 0%, #5ac8fa 60%, #86e0ff 100%);
-  color: #ffffff;
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  box-shadow: 0 12px 32px var(--ka-accent-ring);
+  border-radius: 21px;
+  filter: drop-shadow(0 12px 30px var(--ka-accent-ring));
 }
 
 .ka-welcome h2 {
@@ -856,14 +847,6 @@ textarea:focus-visible {
   place-items: center;
   margin-top: 2px;
   border-radius: 9px;
-  background: var(--ka-surface-muted);
-  color: var(--ka-text-secondary);
-}
-
-.ka-msg--assistant .ka-msg__avatar {
-  background: linear-gradient(135deg, #0071e3, #5ac8fa);
-  color: #ffffff;
-  box-shadow: 0 4px 10px var(--ka-accent-ring);
 }
 
 .ka-msg__body {
@@ -1884,5 +1867,31 @@ textarea:focus-visible {
 
   .ka-backdrop {
     background: rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* —— 流式输出：打字光标 —— */
+.ka-msg__bubble--streaming {
+  white-space: pre-wrap;
+}
+
+.ka-stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  background: var(--ka-accent);
+  animation: ka-cursor-blink 1s steps(2, start) infinite;
+}
+
+@keyframes ka-cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
   }
 }

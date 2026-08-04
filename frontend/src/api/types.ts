@@ -1,5 +1,15 @@
+export type ChatRole = "user" | "assistant";
+
+export interface ChatHistoryMessage {
+  role: ChatRole;
+  content: string;
+}
+
 export interface ChatRequest {
   question: string;
+  conversation_summary?: string;
+  conversation_turn_count?: number;
+  recent_messages?: ChatHistoryMessage[];
 }
 
 export interface SourceSnippet {
@@ -14,6 +24,8 @@ export interface SourceSnippet {
 export interface ChatResponse {
   answer: string;
   sources: SourceSnippet[];
+  conversation_summary?: string;
+  standalone_question?: string;
 }
 
 export interface HealthResponse {
@@ -48,14 +60,14 @@ export interface ApiSettings {
 
 export type ThemePreference = "light" | "dark" | "system";
 
-export type ChatRole = "user" | "assistant";
-
 export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: string;
   sources: SourceSnippet[];
   createdAt: string;
+  /** 流式输出进行中：气泡显示打字光标，完成后置为 false。 */
+  streaming?: boolean;
 }
 
 export interface ChatSession {
@@ -63,5 +75,6 @@ export interface ChatSession {
   title: string;
   createdAt: string;
   updatedAt: string;
+  conversationSummary: string;
   messages: ChatMessage[];
 }

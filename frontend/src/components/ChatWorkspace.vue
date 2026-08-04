@@ -13,7 +13,9 @@
 
     <div class="ka-messages" ref="messageListEl" aria-live="polite">
       <div v-if="messages.length === 0" class="ka-welcome">
-        <div class="ka-welcome__mark" aria-hidden="true">K</div>
+        <div class="ka-welcome__mark" aria-hidden="true">
+          <LogoIcon :size="46" />
+        </div>
         <h2>询问 KF 产品手册中的操作问题</h2>
         <p class="ka-welcome__desc">
           回答会显示在这里，右侧同步展示来源片段、相似度和相关图片，帮助您核对答案依据。
@@ -41,7 +43,7 @@
           :class="`ka-msg--${message.role}`"
         >
           <div v-if="message.role === 'assistant'" class="ka-msg__avatar" aria-hidden="true">
-            <Sparkles :size="15" />
+            <LogoIcon :size="24" />
           </div>
 
           <div class="ka-msg__body">
@@ -52,10 +54,28 @@
             </div>
 
             <div
-              v-if="message.role === 'assistant'"
+              v-if="message.role === 'assistant' && !message.streaming"
               class="ka-msg__bubble"
               v-html="renderMarkdown(message.content)"
             ></div>
+            <div
+              v-else-if="message.role === 'assistant'"
+              class="ka-msg__bubble ka-msg__bubble--streaming"
+            >
+              <span v-if="!message.content" class="ka-thinking" aria-hidden="true">
+                <span class="ka-thinking__orbits">
+                  <span class="ka-thinking__dot"></span>
+                  <span class="ka-thinking__dot"></span>
+                  <span class="ka-thinking__dot"></span>
+                </span>
+                <span class="ka-thinking__text">
+                  <strong>正在检索手册</strong>
+                </span>
+              </span>
+              <template v-else>
+                {{ message.content }}<span class="ka-stream-cursor" aria-hidden="true"></span>
+              </template>
+            </div>
             <div v-else class="ka-msg__bubble">{{ message.content }}</div>
 
             <div v-if="message.role === 'assistant'" class="ka-msg__actions">
@@ -76,9 +96,10 @@
           </div>
         </article>
 
-        <article v-if="isAsking" class="ka-msg ka-msg--assistant" aria-label="KingIAsk 正在思考">
+        <!-- 流式占位气泡已在消息列表内展示检索状态，这里只处理尚无占位消息的过渡场景。 -->
+        <article v-if="isAsking && !hasStreamingMessage" class="ka-msg ka-msg--assistant" aria-label="KingIAsk 正在思考">
           <div class="ka-msg__avatar" aria-hidden="true">
-            <Sparkles :size="15" />
+            <LogoIcon :size="24" />
           </div>
           <div class="ka-msg__body">
             <div class="ka-msg__meta">KingIAsk</div>
@@ -146,11 +167,11 @@ import {
   LoaderCircle,
   RefreshCcw,
   Send,
-  Sparkles,
   Trash2,
 } from "lucide-vue-next";
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import type { ChatMessage, SourceSnippet } from "../api/types";
+import LogoIcon from "./LogoIcon.vue";
 
 const props = defineProps<{
   messages: ChatMessage[];
@@ -169,6 +190,11 @@ const emit = defineEmits<{
 const draft = ref("");
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
 const messageListEl = ref<HTMLElement | null>(null);
+
+// 存在流式占位消息时，不再叠加显示独立的"正在思考"气泡。
+const hasStreamingMessage = computed(() =>
+  props.messages.some((message) => message.role === "assistant" && message.streaming),
+);
 
 // 安全渲染 Markdown：禁止原始 HTML，白名单链接协议，再经 DOMPurify 消毒。
 // 回答内容来自后端检索结果并持久化在 localStorage，必须做双重防御。

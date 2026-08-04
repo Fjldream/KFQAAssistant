@@ -80,6 +80,35 @@ describe("useSessions", () => {
     expect(sessions.activeMessages.value.length).toBe(0);
   });
 
+  it("新会话默认摘要为空并可更新", () => {
+    const sessions = useSessions();
+
+    expect(sessions.activeConversationSummary.value).toBe("");
+    sessions.updateActiveConversationSummary("用户正在了解采集工程。");
+
+    expect(sessions.activeSession.value?.conversationSummary).toBe("用户正在了解采集工程。");
+  });
+
+  it("清空当前会话时同时清空摘要", () => {
+    const sessions = useSessions();
+    sessions.updateActiveConversationSummary("旧摘要");
+
+    sessions.clearActiveSession();
+
+    expect(sessions.activeConversationSummary.value).toBe("");
+  });
+
+  it("旧会话没有摘要字段时回退为空字符串", () => {
+    window.localStorage.setItem(
+      "kingiask-deep.sessions",
+      JSON.stringify([{ id: "old", title: "旧会话", createdAt: "now", updatedAt: "now", messages: [] }]),
+    );
+
+    const sessions = useSessions();
+
+    expect(sessions.activeConversationSummary.value).toBe("");
+  });
+
   it("消息变化后持久化到 localStorage", async () => {
     const sessions = useSessions();
     sessions.activeMessages.value.push({

@@ -35,6 +35,7 @@ function saveRecentQuestions(questions: string[]): void {
 export function useLocalHistory(): {
   recentQuestions: Ref<string[]>;
   addQuestion: (question: string) => void;
+  removeQuestion: (question: string) => void;
   clearQuestions: () => void;
 } {
   const recentQuestions = ref<string[]>(loadRecentQuestions());
@@ -51,6 +52,11 @@ export function useLocalHistory(): {
     saveRecentQuestions(recentQuestions.value);
   }
 
+  function removeQuestion(question: string): void {
+    recentQuestions.value = recentQuestions.value.filter((existing) => existing !== question);
+    saveRecentQuestions(recentQuestions.value);
+  }
+
   function clearQuestions(): void {
     recentQuestions.value = [];
     saveRecentQuestions(recentQuestions.value);
@@ -59,6 +65,7 @@ export function useLocalHistory(): {
   return {
     recentQuestions,
     addQuestion,
+    removeQuestion,
     clearQuestions,
   };
 }
