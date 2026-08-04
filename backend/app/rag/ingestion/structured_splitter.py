@@ -1,6 +1,10 @@
 import re
 from dataclasses import dataclass
 
+from app.rag.ingestion.image_resolver import IMAGE_MARKER_PATTERN
+from app.rag.ingestion.text_cleaner import normalize_blank_lines
+from app.rag.models import DocumentChunk, ManualDocument
+
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 FENCE_PATTERN = re.compile(r"^\s*(```|~~~)")
 
@@ -113,3 +117,45 @@ def split_oversized_section(body: str, chunk_size: int, chunk_overlap: int) -> l
     if current:
         pieces.append("\n\n".join(current))
     return [piece for piece in pieces if piece.strip()]
+
+
+def _images_for_chunk(content: str, document: ManualDocument) -> list[str]:
+    images: list[str] = []
+    for marker in IMAGE_MARKER_PATTERN.findall(content):
+        image = document.image_markers.get(marker)
+        if image and image not in images:
+            images.append(image)
+    return images
+
+
+def _remove_image_markers(content: str) -> str:
+    return normalize_blank_lines(IMAGE_MARKER_PATTERN.sub("", content))
+
+
+def split_structured(document: ManualDocument, chunk_size: int, chunk_overlap: int) -> list[DocumentChunk]:
+    sections = build_sections(parse_heading_blocks(document.content))
+    chunks: list[DocumentChunk] = []
+    index = 0
+    for title_chain, body in sections:
+        if title_chain:
+            prefix = f"{title_chain}\n\n"
+            units = [body] if len(body) <= chunk_size else split_oversized_section(body, chunk_size, chunk_overlap)
+        else:
+            # 无标题退化路径：补文档标题作为上下文，走旧固定长度切分
+            prefix = ""
+            body_full = f"# {document.title}\n\n{body}"
+            units = _split_text(body_full, chunk_size, chunk_overlap)
+        for unit in units:
+            content_with_prefix = f"{prefix}{unit}"
+            chunk_images = _images_for_chunk(content_with_prefix, document) if document.image_markers else document.images
+            chunks.append(
+                DocumentChunk(
+                    id=f"{document.source_path}::{index}",
+                    title=document.title,
+                    source_path=document.source_path,
+                    content=_remove_image_markers(content_with_prefix),
+                    images=chunk_images,
+                )
+            )
+            index += 1
+    return chunks

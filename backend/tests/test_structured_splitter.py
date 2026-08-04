@@ -91,3 +91,61 @@ def test_split_oversized_section_falls_back_to_character_split_for_long_paragrap
     pieces = split_oversized_section(body, chunk_size=30, chunk_overlap=5)
     assert pieces[0] == "X" * 30
     assert pieces[1].startswith("X" * 5)
+
+
+from app.rag.ingestion.structured_splitter import split_structured
+from app.rag.models import ManualDocument
+
+
+def test_split_structured_uses_section_boundaries():
+    doc = ManualDocument(
+        title="教程/采集工程",
+        source_path="教程/采集工程.md",
+        content="# 创建\n\n第一步内容。\n\n## 发布\n\n第二步内容。",
+        images=[],
+    )
+    chunks = split_structured(doc, chunk_size=700, chunk_overlap=100)
+    assert [chunk.content for chunk in chunks] == [
+        "# 创建\n\n第一步内容。",
+        "# 创建\n## 发布\n\n第二步内容。",
+    ]
+    assert [chunk.id for chunk in chunks] == ["教程/采集工程.md::0", "教程/采集工程.md::1"]
+
+
+def test_split_structured_prepends_title_chain_to_oversized_pieces():
+    doc = ManualDocument(
+        title="教程/采集工程",
+        source_path="教程/采集工程.md",
+        content="# 创建\n\n" + "内容。" * 50,
+        images=[],
+    )
+    chunks = split_structured(doc, chunk_size=30, chunk_overlap=0)
+    assert len(chunks) > 1
+    assert all(chunk.content.startswith("# 创建\n\n") for chunk in chunks)
+    assert all(len(chunk.content.split("\n\n", 1)[1]) <= 30 for chunk in chunks)
+
+
+def test_split_structured_falls_back_to_plain_split_without_headings():
+    doc = ManualDocument(
+        title="关于/客户端",
+        source_path="关于/客户端.md",
+        content="客户端支持 Windows。" * 10,
+        images=[],
+    )
+    chunks = split_structured(doc, chunk_size=30, chunk_overlap=5)
+    assert chunks[0].id == "关于/客户端.md::0"
+    assert "客户端支持 Windows" in chunks[0].content
+
+
+def test_split_structured_attaches_images_by_markers():
+    doc = ManualDocument(
+        title="教程",
+        source_path="教程.md",
+        content="# 第一步\n\n正文。\n[[KF_IMAGE_0]]\n\n# 第二步\n\n正文。\n[[KF_IMAGE_1]]\n",
+        images=["1.png", "2.png"],
+        image_markers={"[[KF_IMAGE_0]]": "1.png", "[[KF_IMAGE_1]]": "2.png"},
+    )
+    chunks = split_structured(doc, chunk_size=700, chunk_overlap=100)
+    assert chunks[0].images == ["1.png"]
+    assert chunks[1].images == ["2.png"]
+    assert all("[[KF_IMAGE_" not in chunk.content for chunk in chunks)
