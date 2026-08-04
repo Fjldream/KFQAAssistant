@@ -62,6 +62,7 @@ class ForbiddenSourceChain:
         )
 
 
+
 def test_load_eval_questions_reads_json_file(tmp_path: Path):
     eval_file = tmp_path / "eval.json"
     eval_file.write_text(
@@ -250,3 +251,25 @@ def test_evaluate_main_reports_missing_file_in_chinese(tmp_path: Path, monkeypat
     captured = capsys.readouterr()
     assert exit_code != 0
     assert "评测文件" in captured.err
+
+
+def test_evaluate_question_records_faithfulness(monkeypatch):
+    from scripts.evaluate import EvalResult, evaluate_question
+    from app.schemas.chat import ChatResponse, SourceSnippet
+
+    class FakeChain:
+        def answer(self, question):
+            return ChatResponse(
+                answer="按钮可配置颜色。",
+                sources=[SourceSnippet(title="t", source_path="p.md", snippet="按钮可配置颜色。", evidence_ids=["资料 1"], images=[], score=0.9)],
+            )
+
+    class FakeJudge:
+        def complete_json(self, system_prompt, user_prompt):
+            if "拆" in system_prompt:
+                return {"claims": ["按钮可配置颜色。"]}
+            return {"supported": True, "evidence": "按钮可配置颜色。"}
+
+    result = evaluate_question(FakeChain(), "问题", [], [], False, False, judge=FakeJudge(), semantic_enabled=True)
+    assert result.faithfulness_score == 1.0
+    assert len(result.faithfulness_claims) == 1

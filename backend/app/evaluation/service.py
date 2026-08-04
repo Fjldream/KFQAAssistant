@@ -122,6 +122,9 @@ class EvaluationService:
             image_count=int(payload.get("image_count", 0)),
             source_count=int(payload.get("source_count", 0)),
             elapsed_ms=float(payload.get("elapsed_ms", 0)),
+            faithfulness_score=payload.get("faithfulness_score"),
+            faithfulness_claims=list(payload.get("faithfulness_claims", [])),
+            faithfulness_elapsed_ms=float(payload.get("faithfulness_elapsed_ms", 0.0)),
         )
 
     # 返回最近评测运行摘要列表，供前端历史列表使用。

@@ -28,6 +28,9 @@ class TurnResultPayload(BaseModel):
     image_count: int = 0
     source_count: int = 0
     elapsed_ms: float = 0.0
+    faithfulness_score: float | None = None
+    faithfulness_claims: list[dict] = Field(default_factory=list)
+    faithfulness_elapsed_ms: float = 0.0
 
 
 class CaseResultPayload(BaseModel):

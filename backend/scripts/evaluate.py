@@ -5,9 +5,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from app.core.config import get_settings
+from app.evaluation.judge import create_judgement_client
+from app.evaluation.metrics_registry import get_metric
 from app.rag.generation.answer_policy import is_no_answer
 from app.rag.factory import create_rag_chain
 from app.schemas.chat import ChatResponse
+
 
 
 class ChainProtocol(Protocol):
@@ -46,6 +50,8 @@ class EvalResult:
     source_passed: bool
     image_passed: bool
     no_answer_passed: bool
+    faithfulness_score: float | None = None
+    faithfulness_claims: list[dict] = field(default_factory=list)
 
 
 # 从 JSON 文件读取评估问题，每个问题可包含关键词、来源、图片和拒答预期。
@@ -107,6 +113,8 @@ def evaluate_question(
     forbidden_source_keywords: list[str] | None = None,
     min_sources: int = 0,
     min_images: int = 0,
+    judge=None,
+    semantic_enabled: bool = True,
 ) -> EvalResult:
     forbidden_source_keywords = forbidden_source_keywords or []
     response = chain.answer(question)
@@ -132,6 +140,12 @@ def evaluate_question(
         and image_matched
         and no_answer_passed
     )
+    faithfulness_score = None
+    faithfulness_claims: list[dict] = []
+    if semantic_enabled and judge is not None and not is_no_answer(response.answer) and response.sources:
+        result = get_metric("faithfulness").evaluate(response.answer, [s.snippet for s in response.sources], judge)
+        faithfulness_score = result.score
+        faithfulness_claims = result.details.get("claims", [])
     return EvalResult(
         question=question,
         passed=passed,
@@ -149,6 +163,8 @@ def evaluate_question(
         source_passed=source_passed,
         image_passed=image_matched,
         no_answer_passed=no_answer_passed,
+        faithfulness_score=faithfulness_score,
+        faithfulness_claims=faithfulness_claims,
     )
 
 
@@ -187,6 +203,8 @@ def eval_result_to_dict(result: EvalResult) -> dict[str, object]:
         "no_answer_passed": result.no_answer_passed,
         "sources": result.sources,
         "answer": result.answer,
+        "faithfulness_score": result.faithfulness_score,
+        "faithfulness_claims": result.faithfulness_claims,
     }
 
 
@@ -229,6 +247,10 @@ def print_report(results: list[EvalResult]) -> None:
         print(f"   图片数量: {result.image_count}")
         print(f"   来源数量: {result.source_count}")
         print(f"   来源: {', '.join(result.sources) or '无'}")
+        print(f"   忠实度: {result.faithfulness_score if result.faithfulness_score is not None else '未评估'}")
+        for claim in result.faithfulness_claims:
+            if not claim["supported"]:
+                print(f"    幻觉句: {claim['claim']}")
         print()
 
 
@@ -246,6 +268,8 @@ def main() -> int:
         return 2
 
     chain = create_rag_chain()
+    settings = get_settings()
+    judge = create_judgement_client(settings)
     results = [
         evaluate_question(
             chain=chain,
@@ -257,6 +281,8 @@ def main() -> int:
             forbidden_source_keywords=item.forbidden_source_keywords,
             min_sources=item.min_sources,
             min_images=item.min_images,
+            judge=judge,
+            semantic_enabled=settings.evaluation_semantic_enabled,
         )
         for item in questions
     ]
