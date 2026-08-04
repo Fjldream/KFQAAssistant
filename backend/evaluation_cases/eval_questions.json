@@ -1,0 +1,64 @@
+[
+  {
+    "question": "页面编辑器主要包括哪些区域？",
+    "expected_keywords": ["菜单栏", "工具栏", "工具箱", "配置窗"],
+    "expected_source_keywords": ["页面编辑器"],
+    "expect_images": false,
+    "expect_no_answer": false
+  },
+  {
+    "question": "客户端对操作系统有什么要求？",
+    "expected_keywords": ["Windows", "Linux", "Chrome"],
+    "expected_source_keywords": ["系统环境要求/客户端"],
+    "expect_images": false,
+    "expect_no_answer": false
+  },
+  {
+    "question": "如何进入页面编辑器？",
+    "expected_keywords": ["页面管理", "双击", "页面编辑器"],
+    "expected_source_keywords": ["页面编辑器"],
+    "expect_images": false,
+    "expect_no_answer": false
+  },
+  {
+    "question": "工具栏支持哪些编辑操作？",
+    "expected_keywords": ["保存", "撤销", "重做"],
+    "expected_source_keywords": ["工具栏"],
+    "expect_images": false,
+    "expect_no_answer": false
+  },
+  {
+    "question": "手册里有没有微信登录说明？",
+    "expected_keywords": ["手册中没有找到相关说明"],
+    "expected_source_keywords": [],
+    "expect_images": false,
+    "expect_no_answer": true
+  },
+  {
+    "question": "如何创建采集工程？",
+    "expected_keyword_groups": [["新建工程", "新建数采工程", "新建采集工程", "新建按钮"], ["名称"]],
+    "expected_source_keyword_groups": [["数采管理/工程开发-Windows", "数采管理"]],
+    "expect_images": false,
+    "expect_no_answer": false
+  },
+  {
+    "question": "如何创建采集工程，如何运行它？",
+    "expected_keyword_groups": [["新建工程", "新建数采工程", "新建采集工程", "新建按钮"], ["发布"], ["运维中心"], ["部署"], ["启动"]],
+    "expected_source_keywords": ["数采管理"],
+    "forbidden_source_keywords": ["数据APP组态/工程管理/工程管理"],
+    "expect_images": true,
+    "min_sources": 2,
+    "min_images": 1,
+    "expect_no_answer": false
+  },
+  {
+    "question": "如何启动数据组态工程？",
+    "expected_keywords": ["运维中心", "部署", "启动"],
+    "expected_source_keyword_groups": [["教程/5分钟完成KingScada数据接入KF3.6平台", "数采管理", "数据源管理", "运维中心"]],
+    "forbidden_source_keywords": ["数据APP组态/工程管理/工程管理"],
+    "expect_images": true,
+    "min_sources": 1,
+    "min_images": 1,
+    "expect_no_answer": false
+  }
+]

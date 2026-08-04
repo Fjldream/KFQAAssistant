@@ -1,0 +1,57 @@
+[
+  {
+    "id": "dialog.collect.create_then_run",
+    "category": "数采管理",
+    "priority": "P0",
+    "tags": ["dialogue", "workflow"],
+    "turns": [
+      {
+        "question": "如何创建采集工程？",
+        "expected_keyword_groups": [["新建工程", "新建数采工程", "新建采集工程", "新建按钮"], ["名称"]],
+        "expected_source_keyword_groups": [["数采管理/工程开发-Windows", "数采管理"]]
+      },
+      {
+        "question": "创建完成后怎么运行它？",
+        "expected_keywords": ["发布", "运维中心", "部署", "启动"],
+        "expected_source_keywords": ["数采管理"],
+        "min_sources": 1
+      }
+    ]
+  },
+  {
+    "id": "dialog.editor.enter_then_regions",
+    "category": "页面编辑器",
+    "priority": "P1",
+    "tags": ["dialogue", "editor"],
+    "turns": [
+      {
+        "question": "如何进入页面编辑器？",
+        "expected_keywords": ["页面管理", "双击", "页面编辑器"],
+        "expected_source_keywords": ["页面编辑器"]
+      },
+      {
+        "question": "里面主要有哪些区域？",
+        "expected_keywords": ["菜单栏", "工具栏", "工具箱", "配置窗"],
+        "expected_source_keywords": ["页面编辑器"]
+      }
+    ]
+  },
+  {
+    "id": "dialog.boundary.wechat_enterprise_dingtalk",
+    "category": "边界问题",
+    "priority": "P0",
+    "tags": ["dialogue", "guardrail"],
+    "turns": [
+      {
+        "question": "手册里有没有微信登录说明？",
+        "expected_keywords": ["手册中没有找到相关说明"],
+        "expect_no_answer": true
+      },
+      {
+        "question": "那企业微信或者钉钉呢？",
+        "expected_keywords": ["手册中没有找到相关说明"],
+        "expect_no_answer": true
+      }
+    ]
+  }
+]
