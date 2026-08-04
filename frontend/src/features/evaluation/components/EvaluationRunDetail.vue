@@ -54,3 +54,9 @@ defineProps<{
   detail: EvaluationRunDetail | null;
 }>();
 </script>
+
+<style scoped>
+.ke-claim-hallucination {
+  color: var(--ka-red, red);
+}
+</style>

@@ -208,5 +208,6 @@ describe("EvaluationRunDetail faithfulness", () => {
     expect(wrapper.text()).toContain("忠实度");
     expect(wrapper.text()).toContain("50%");
     expect(wrapper.text()).toContain("编造句");
+    expect(wrapper.text()).not.toContain("有据句");
   });
 });
