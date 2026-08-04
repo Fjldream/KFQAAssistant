@@ -1,6 +1,8 @@
 from time import perf_counter
 from typing import Protocol
 
+from app.evaluation.judge import JudgeProtocol
+from app.evaluation.metrics_registry import get_metric
 from app.evaluation.models import CaseResult, EvaluationCase, EvaluationTurn, TurnResult
 from app.rag.generation.answer_policy import is_no_answer
 from app.schemas.chat import ChatHistoryMessage, ChatResponse
@@ -56,8 +58,15 @@ def _count_images(response: ChatResponse) -> int:
     return sum(len(source.images) for source in response.sources)
 
 
-# 根据单轮规则和问答响应生成 TurnResult。
-def _evaluate_turn(turn: EvaluationTurn, response: ChatResponse, elapsed_ms: float) -> TurnResult:
+# 根据单轮规则和问答响应生成 TurnResult；语义评估结果作为可选字段写入，默认保持旧行为。
+def _evaluate_turn(
+    turn: EvaluationTurn,
+    response: ChatResponse,
+    elapsed_ms: float,
+    faithfulness_score: float | None = None,
+    faithfulness_claims: list[dict] | None = None,
+    faithfulness_elapsed_ms: float = 0.0,
+) -> TurnResult:
     answer_and_sources = f"{response.answer}\n{_source_search_text(response)}"
     source_text = _source_search_text(response)
     matched_keywords, missing_keywords = _match_required_groups(
@@ -98,6 +107,9 @@ def _evaluate_turn(turn: EvaluationTurn, response: ChatResponse, elapsed_ms: flo
         image_count=image_count,
         source_count=source_count,
         elapsed_ms=elapsed_ms,
+        faithfulness_score=faithfulness_score,
+        faithfulness_claims=faithfulness_claims or [],
+        faithfulness_elapsed_ms=faithfulness_elapsed_ms,
     )
 
 
@@ -120,8 +132,15 @@ def _build_failure_reasons(turn_results: list[TurnResult]) -> list[str]:
     return reasons
 
 
-# 执行一个完整评测用例，连续对话会把上一轮摘要和最近消息传给下一轮。
-def evaluate_case(chain: ChainProtocol, case: EvaluationCase) -> CaseResult:
+# 执行一个完整评测用例，连续对话会把上一轮摘要和最近消息传给下一轮；
+# 语义评估开启时对非拒答轮次运行第一个已注册指标并写入 TurnResult。
+def evaluate_case(
+    chain: ChainProtocol,
+    case: EvaluationCase,
+    judge: JudgeProtocol | None = None,
+    semantic_enabled: bool = True,
+    metrics: tuple[str, ...] = ("faithfulness",),
+) -> CaseResult:
     conversation_summary = ""
     recent_messages: list[ChatHistoryMessage] = []
     turn_results: list[TurnResult] = []
@@ -136,7 +155,28 @@ def evaluate_case(chain: ChainProtocol, case: EvaluationCase) -> CaseResult:
             recent_messages=recent_messages,
         )
         elapsed_ms = (perf_counter() - turn_started) * 1000
-        turn_result = _evaluate_turn(turn, response, elapsed_ms)
+        faithfulness_score = None
+        faithfulness_claims: list[dict] = []
+        faithfulness_elapsed_ms = 0.0
+        is_refusal = is_no_answer(response.answer) or not response.sources
+        if judge is not None and semantic_enabled and not is_refusal and metrics:
+            metric = get_metric(metrics[0])
+            result = metric.evaluate(
+                response.answer,
+                [source.snippet for source in response.sources],
+                judge,
+            )
+            faithfulness_score = result.score
+            faithfulness_claims = result.details.get("claims", [])
+            faithfulness_elapsed_ms = result.details.get("elapsed_ms", 0.0)
+        turn_result = _evaluate_turn(
+            turn,
+            response,
+            elapsed_ms,
+            faithfulness_score,
+            faithfulness_claims,
+            faithfulness_elapsed_ms,
+        )
         turn_results.append(turn_result)
 
         recent_messages = [
