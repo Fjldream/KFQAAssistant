@@ -1,6 +1,15 @@
+import re
+
 from bs4 import BeautifulSoup
+from markdownify import markdownify as _markdownify
 
 from app.rag.ingestion.image_resolver import IMAGE_PATTERN
+
+_INLINE_STRIKE_PATTERN = re.compile(r"~~(.+?)~~")
+_INLINE_LINK_PATTERN = re.compile(r"\[([^\]]+)]\([^)]*\)")
+_INLINE_BOLD_PATTERN = re.compile(r"\*\*(.+?)\*\*")
+_INLINE_ITALIC_PATTERN = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)")
+_INLINE_CODE_PATTERN = re.compile(r"`([^`]+)`")
 
 
 # 压缩多余空行，保留段落边界，让后续切块时文本更稳定。
@@ -25,11 +34,22 @@ def clean_markdown(text: str) -> str:
     return normalize_blank_lines(without_images)
 
 
-# 清洗 HTML 正文：去掉脚本和样式，只保留可用于检索的文字内容。
+def _strip_inline_markdown(text: str) -> str:
+    text = _INLINE_STRIKE_PATTERN.sub(r"\1", text)
+    text = _INLINE_LINK_PATTERN.sub(r"\1", text)
+    text = _INLINE_BOLD_PATTERN.sub(r"\1", text)
+    text = _INLINE_ITALIC_PATTERN.sub(r"\1", text)
+    text = _INLINE_CODE_PATTERN.sub(r"\1", text)
+    # 还原 markdownify 对 `*` `_` `[` 等字符的转义（如图片标记 [[KF_IMAGE_0]] 中的下划线）。
+    text = re.sub(r"\\([\\`*_\[\]])", r"\1", text)
+    return text
+
+
+# 清洗 HTML 正文：去掉脚本和样式，转成带标题层级的 Markdown，只保留可用于检索的文字内容。
 def clean_html(html: str) -> str:
     soup = BeautifulSoup(html, "lxml")
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
     main = soup.select_one("#write") or soup.body or soup
-    text = main.get_text("\n")
-    return normalize_blank_lines(text)
+    text = _markdownify(str(main), heading_style="ATX")
+    return normalize_blank_lines(_strip_inline_markdown(text))
