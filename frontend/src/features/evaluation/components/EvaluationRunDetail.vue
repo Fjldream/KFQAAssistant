@@ -25,6 +25,21 @@
           <div class="ke-turn">
             <p>{{ turn.answer }}</p>
             <small v-if="turn.standalone_question">独立问题：{{ turn.standalone_question }}</small>
+            <p
+              v-if="turn.faithfulness_score !== null && turn.faithfulness_score !== undefined"
+              class="ke-faithfulness"
+            >
+              忠实度：{{ Math.round(turn.faithfulness_score * 100) }}%
+            </p>
+            <ul v-if="turn.faithfulness_claims && turn.faithfulness_claims.length" class="ke-claims">
+              <li
+                v-for="(claim, i) in turn.faithfulness_claims.filter((c) => !c.supported)"
+                :key="i"
+                class="ke-claim-hallucination"
+              >
+                幻觉句：{{ claim.claim }}（{{ claim.evidence || "上下文中无依据" }}）
+              </li>
+            </ul>
           </div>
         </details>
       </article>

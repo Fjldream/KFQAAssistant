@@ -170,3 +170,43 @@ describe("EvaluationCenter", () => {
     expect(client.saveProgressiveRun).not.toHaveBeenCalled();
   });
 });
+
+import EvaluationRunDetail from "../components/EvaluationRunDetail.vue";
+
+describe("EvaluationRunDetail faithfulness", () => {
+  const detail = {
+    summary: { run_id: "r1", status: "completed", case_total: 1, case_passed: 1, pass_rate: 1, avg_faithfulness_score: 0.5 },
+    gate_result: { passed: true, reasons: [] },
+    case_results: [
+      {
+        case_id: "c1",
+        category: "cat",
+        priority: "P1",
+        case_type: "single",
+        passed: true,
+        failure_reasons: [],
+        turn_results: [
+          {
+            question: "问题？",
+            answer: "回答。",
+            standalone_question: null,
+            passed: true,
+            faithfulness_score: 0.5,
+            faithfulness_claims: [
+              { claim: "编造句", supported: false, evidence: "" },
+              { claim: "有据句", supported: true, evidence: "依据" },
+            ],
+            faithfulness_elapsed_ms: 100,
+          },
+        ],
+      },
+    ],
+  };
+
+  it("renders faithfulness score and hallucinated claims", () => {
+    const wrapper = mount(EvaluationRunDetail, { props: { detail } });
+    expect(wrapper.text()).toContain("忠实度");
+    expect(wrapper.text()).toContain("50%");
+    expect(wrapper.text()).toContain("编造句");
+  });
+});

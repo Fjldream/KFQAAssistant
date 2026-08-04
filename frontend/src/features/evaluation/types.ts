@@ -37,6 +37,12 @@ export interface GateResult {
   reasons: string[];
 }
 
+export interface FaithfulnessClaim {
+  claim: string;
+  supported: boolean;
+  evidence: string;
+}
+
 export interface TurnResult {
   question: string;
   answer: string;
@@ -48,6 +54,9 @@ export interface TurnResult {
   image_count?: number;
   source_count?: number;
   elapsed_ms?: number;
+  faithfulness_score: number | null;
+  faithfulness_claims: FaithfulnessClaim[];
+  faithfulness_elapsed_ms: number;
 }
 
 export interface CaseResult {
