@@ -6,6 +6,7 @@ from app.evaluation.faithfulness import (
     split_claims,
 )
 from app.evaluation.judge import JudgementCompletion, JudgementError
+from app.evaluation.models import MetricStatus
 
 
 class FakeJudge:
@@ -17,6 +18,8 @@ class FakeJudge:
         self.calls.append((system_prompt, user_prompt))
         if self.responses.get("raise"):
             raise JudgementError()
+        if "逐条判断" in system_prompt:
+            return JudgementCompletion(self.responses)
         if "拆分" in user_prompt or "声明" in system_prompt and "拆" in system_prompt:
             return JudgementCompletion(self.responses.get("split", {"claims": []}))
         return JudgementCompletion(self.responses["support"].pop(0))
@@ -47,18 +50,25 @@ def test_judge_claim_support_coerces_string_supported_flags():
 
 def test_compute_faithfulness_scores_supported_ratio():
     judge = FakeJudge({
-        "split": {"claims": ["句1", "句2", "句3"]},
-        "support": [
-            {"supported": True, "evidence": "依据一"},
-            {"supported": False, "evidence": ""},
-            {"supported": True, "evidence": "依据二"},
+        "claims": [
+            {"claim": "工程需要名称", "supported": True, "evidence": "填写名称"},
+            {"claim": "工程自动运行", "supported": False, "evidence": ""},
         ],
     })
     result = compute_faithfulness(judge, "回答", ["上下文"])
     assert isinstance(result, FaithfulnessResult)
-    assert result.score == 2 / 3
-    assert len(result.claims) == 3
-    assert result.claims[1] == {"claim": "句2", "supported": False, "evidence": ""}
+    assert result.score == 0.5
+    assert len(judge.calls) == 1
+    assert result.claims[1] == {"claim": "工程自动运行", "supported": False, "evidence": ""}
+
+
+def test_compute_faithfulness_returns_error_for_missing_supported_boolean():
+    judge = FakeJudge({"claims": [{"claim": "工程需要名称", "evidence": "填写名称"}]})
+
+    result = compute_faithfulness(judge, "回答", ["上下文"])
+
+    assert result.status == MetricStatus.ERROR
+    assert result.error_code == "judge_schema_error"
 
 
 def test_compute_faithfulness_returns_none_for_no_answer():
@@ -75,57 +85,21 @@ def test_compute_faithfulness_returns_none_for_empty_answer():
     assert result.claims == []
 
 
-def test_compute_faithfulness_returns_none_for_empty_contexts():
+def test_compute_faithfulness_returns_error_for_empty_contexts():
     judge = FakeJudge({})
     result = compute_faithfulness(judge, "回答内容", [])
-    assert result.score is None
+    assert result.status == MetricStatus.ERROR
     assert result.claims == []
 
-
-def test_compute_faithfulness_returns_none_when_split_returns_empty_claims():
-    judge = FakeJudge({"split": {"claims": []}})
+def test_compute_faithfulness_returns_error_when_batch_returns_empty_claims():
+    judge = FakeJudge({"claims": []})
     result = compute_faithfulness(judge, "回答内容", ["上下文"])
-    assert result.score is None
-    assert result.claims == []
-
-
-def test_compute_faithfulness_returns_none_when_all_judgements_fail():
-    class AllSupportFailJudge(FakeJudge):
-        def complete_json(self, system_prompt, user_prompt):
-            if "判" in system_prompt:
-                raise JudgementError()
-            return super().complete_json(system_prompt, user_prompt)
-
-    judge = AllSupportFailJudge({
-        "split": {"claims": ["句1", "句2"]},
-        "support": [{"supported": True, "evidence": "依据"}],
-    })
-    result = compute_faithfulness(judge, "回答内容", ["上下文"])
-    assert result.score is None
+    assert result.status == MetricStatus.ERROR
     assert result.claims == []
 
 
 def test_compute_faithfulness_returns_none_on_judge_failure():
     judge = FakeJudge({"raise": True})
     result = compute_faithfulness(judge, "回答内容", ["上下文"])
-    assert result.score is None
+    assert result.status == MetricStatus.ERROR
     assert result.claims == []
-
-
-def test_compute_faithfulness_skips_claim_on_single_failure():
-    judge = FakeJudge({
-        "split": {"claims": ["句1", "句2"]},
-        "support": [{"supported": True, "evidence": "依据"}],
-    })
-
-    class FlakyJudge(FakeJudge):
-        def complete_json(self, system_prompt, user_prompt):
-            if "判" in system_prompt and len(self.calls) % 2 == 0:
-                raise JudgementError()
-            return super().complete_json(system_prompt, user_prompt)
-
-    flaky = FlakyJudge({"split": {"claims": ["句1", "句2"]}, "support": [{"supported": True, "evidence": "依据"}]})
-    result = compute_faithfulness(flaky, "回答", ["上下文"])
-    # 句1 判定失败被跳过，句2 成功 → 1/1
-    assert result.score == 1.0
-    assert len(result.claims) == 1

@@ -1,5 +1,5 @@
 from app.evaluation.metrics import summarize_case_results
-from app.evaluation.models import CaseResult, TurnResult
+from app.evaluation.models import CaseResult, MetricResult, MetricStatus, TurnResult
 
 
 # 构造最小轮次结果，方便指标测试聚焦在汇总逻辑。
@@ -69,3 +69,22 @@ def test_summarize_case_results_handles_empty_results():
     assert summary.case_passed == 0
     assert summary.pass_rate == 0
     assert summary.category_pass_rates == {}
+
+
+def test_summarize_case_results_marks_judge_metric_error_invalid():
+    result = CaseResult(
+        case_id="judge-error",
+        category="测试",
+        priority="P1",
+        case_type="single",
+        passed=False,
+        turn_results=[TurnResult(
+            question="q", answer="a", standalone_question=None, passed=False,
+            keyword_passed=True, source_passed=True, image_passed=True, no_answer_passed=True,
+            metric_results=[MetricResult("answer_correctness", None, MetricStatus.ERROR, error_code="judge_http_error")],
+        )],
+    )
+
+    summary = summarize_case_results([result])
+
+    assert summary.status == "INVALID"

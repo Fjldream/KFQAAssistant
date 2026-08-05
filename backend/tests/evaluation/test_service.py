@@ -63,6 +63,24 @@ def test_service_lists_cases(tmp_path: Path):
     assert cases[0].case_type == "single"
 
 
+def test_service_validates_ordered_configured_metrics_before_run(tmp_path: Path):
+    cases_path = tmp_path / "cases.json"
+    dialogues_path = tmp_path / "dialogues.json"
+    _write_cases(cases_path)
+
+    service = EvaluationService(
+        repository=EvaluationRepository(tmp_path / "eval.db"),
+        chain_factory=FakeChain,
+        cases_path=cases_path,
+        dialogues_path=dialogues_path,
+        fail_under=0.8,
+        max_p95_ms=30000,
+        evaluation_metrics="faithfulness, answer_correctness, hit_at_k",
+    )
+
+    assert service.metrics == ("faithfulness", "answer_correctness", "hit_at_k")
+
+
 # 验证服务可以执行评测、保存运行，并返回可查询详情。
 def test_service_runs_evaluation_and_saves_detail(tmp_path: Path):
     cases_path = tmp_path / "cases.json"
@@ -192,9 +210,7 @@ def test_service_run_case_computes_faithfulness_when_semantic_enabled(tmp_path, 
 
     class FakeJudge:
         def complete_json(self, system_prompt, user_prompt):
-            if "拆" in system_prompt:
-                return {"claims": ["点击新建工程填写名称"]}
-            return {"supported": True, "evidence": "新建工程并填写名称。"}
+            return {"claims": [{"claim": "点击新建工程填写名称", "supported": True, "evidence": "新建工程并填写名称。"}]}
 
     monkeypatch.setattr(service_module, "create_judgement_client", lambda settings: FakeJudge())
 

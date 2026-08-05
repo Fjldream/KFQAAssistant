@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from time import perf_counter
 
 from app.evaluation.judge import JudgementCompletion, JudgementError, JudgeProtocol
+from app.evaluation.models import MetricStatus
 from app.rag.generation.answer_policy import is_no_answer
 
 
@@ -21,6 +22,11 @@ SUPPORT_SYSTEM_PROMPT = """你是 RAG 回答忠实度评估助手。
 2. 手册片段没有提到、或与手册矛盾的，都算"不支持"（编造）。
 3. 只输出 JSON：{"supported": true/false, "evidence": "手册中的依据原文；无依据则输出空字符串"}。"""
 
+BATCH_SYSTEM_PROMPT = """你是 RAG 回答忠实度评估助手。
+把回答拆分为可验证的事实声明，并逐条判断是否能由手册片段支持。
+只输出 JSON：{"claims": [{"claim": "声明", "supported": true/false, "evidence": "依据或空字符串"}]}。
+每条 claim 必须有 boolean 类型的 supported。"""
+
 
 @dataclass(frozen=True)
 class ClaimJudgement:
@@ -34,6 +40,9 @@ class FaithfulnessResult:
     score: float | None
     claims: list[dict] = field(default_factory=list)
     elapsed_ms: float = 0.0
+    status: MetricStatus = MetricStatus.PASSED
+    error_code: str | None = None
+    token_usage: object | None = None
 
 
 def split_claims(judge: JudgeProtocol, answer: str) -> list[str]:
@@ -67,27 +76,27 @@ def judge_claim_support(judge: JudgeProtocol, claim: str, contexts: list[str]) -
 def compute_faithfulness(judge: JudgeProtocol, answer: str, contexts: list[str]) -> FaithfulnessResult:
     started = perf_counter()
     elapsed = lambda: (perf_counter() - started) * 1000
-    if not answer.strip() or is_no_answer(answer) or not contexts:
-        return FaithfulnessResult(score=None, claims=[], elapsed_ms=elapsed())
+    if not answer.strip() or is_no_answer(answer):
+        return FaithfulnessResult(score=None, claims=[], elapsed_ms=elapsed(), status=MetricStatus.SKIPPED)
+    if not contexts:
+        return FaithfulnessResult(score=None, claims=[], elapsed_ms=elapsed(), status=MetricStatus.ERROR, error_code="missing_contexts")
     try:
-        claims = split_claims(judge, answer)
+        context_text = "\n\n---\n\n".join(contexts)
+        completion = judge.complete_json(
+            BATCH_SYSTEM_PROMPT,
+            f"回答：\n{answer}\n\n手册片段：\n{context_text}",
+        )
     except JudgementError:
-        return FaithfulnessResult(score=None, claims=[], elapsed_ms=elapsed())
-    if not claims:
-        return FaithfulnessResult(score=None, claims=[], elapsed_ms=elapsed())
-
-    judgements: list[ClaimJudgement] = []
-    for claim in claims:
-        try:
-            judgements.append(judge_claim_support(judge, claim, contexts))
-        except JudgementError:
-            continue  # 单条判定失败跳过，不计入分母
-
-    if not judgements:
-        return FaithfulnessResult(score=None, claims=[], elapsed_ms=elapsed())
-    supported = sum(1 for item in judgements if item.supported)
-    claims_payload = [
-        {"claim": item.claim, "supported": item.supported, "evidence": item.evidence}
-        for item in judgements
-    ]
-    return FaithfulnessResult(score=supported / len(judgements), claims=claims_payload, elapsed_ms=elapsed())
+        return FaithfulnessResult(score=None, claims=[], elapsed_ms=elapsed(), status=MetricStatus.ERROR, error_code="judge_http_error")
+    data = completion.data if isinstance(completion, JudgementCompletion) else completion
+    if not isinstance(data, dict) or not isinstance(data.get("claims"), list):
+        return FaithfulnessResult(score=None, claims=[], elapsed_ms=elapsed(), status=MetricStatus.ERROR, error_code="judge_schema_error")
+    claims_payload: list[dict] = []
+    for item in data["claims"]:
+        if not isinstance(item, dict) or not isinstance(item.get("claim"), str) or not isinstance(item.get("supported"), bool):
+            return FaithfulnessResult(score=None, claims=[], elapsed_ms=elapsed(), status=MetricStatus.ERROR, error_code="judge_schema_error")
+        claims_payload.append({"claim": item["claim"].strip(), "supported": item["supported"], "evidence": str(item.get("evidence", ""))})
+    if not claims_payload:
+        return FaithfulnessResult(score=None, claims=[], elapsed_ms=elapsed(), status=MetricStatus.ERROR, error_code="judge_schema_error")
+    supported = sum(1 for item in claims_payload if item["supported"])
+    return FaithfulnessResult(score=supported / len(claims_payload), claims=claims_payload, elapsed_ms=elapsed(), token_usage=completion.usage if isinstance(completion, JudgementCompletion) else None)

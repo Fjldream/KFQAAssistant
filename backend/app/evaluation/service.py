@@ -6,6 +6,7 @@ from app.evaluation.comparison import compare_case_results
 from app.evaluation.evaluator import ChainProtocol, evaluate_case
 from app.evaluation.judge import create_judgement_client
 from app.evaluation.gates import evaluate_gates
+from app.evaluation.metrics_registry import get_metric
 from app.evaluation.metrics import summarize_case_results
 from app.evaluation.models import (
     CaseResult,
@@ -31,6 +32,7 @@ class EvaluationService:
         fail_under: float,
         max_p95_ms: float | None,
         semantic_enabled: bool = False,
+        evaluation_metrics: str = "faithfulness",
     ) -> None:
         self.repository = repository
         self.chain_factory = chain_factory
@@ -39,6 +41,11 @@ class EvaluationService:
         self.fail_under = fail_under
         self.max_p95_ms = max_p95_ms
         self.semantic_enabled = semantic_enabled
+        self.metrics = tuple(name.strip() for name in evaluation_metrics.split(",") if name.strip())
+        if not self.metrics:
+            raise ValueError("至少配置一个评测指标")
+        for name in self.metrics:
+            get_metric(name)
 
     # 加载单轮和连续对话评测用例，按配置决定是否包含连续对话。
     def _load_cases(self, include_dialogues: bool = True) -> list[EvaluationCase]:
@@ -60,7 +67,7 @@ class EvaluationService:
         chain = self.chain_factory()
         judge = self._judge_or_none()
         case_results = [
-            evaluate_case(chain, case, judge=judge, semantic_enabled=self.semantic_enabled)
+            evaluate_case(chain, case, judge=judge, semantic_enabled=self.semantic_enabled, metrics=self.metrics)
             for case in self._load_cases(include_dialogues=include_dialogues)
         ]
         summary = summarize_case_results(case_results)
@@ -97,6 +104,7 @@ class EvaluationService:
             target_case,
             judge=self._judge_or_none(),
             semantic_enabled=self.semantic_enabled,
+            metrics=self.metrics,
         )
 
     # 保存前端渐进式评测得到的用例结果，并生成完整运行报告。
@@ -201,4 +209,5 @@ def create_evaluation_service() -> EvaluationService:
         fail_under=settings.evaluation_fail_under,
         max_p95_ms=settings.evaluation_max_p95_ms,
         semantic_enabled=settings.evaluation_semantic_enabled,
+        evaluation_metrics=settings.evaluation_metrics,
     )

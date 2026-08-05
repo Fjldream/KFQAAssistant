@@ -1,15 +1,7 @@
 # backend/app/evaluation/metrics_registry.py
-from dataclasses import dataclass, field
-
 from app.evaluation.faithfulness import compute_faithfulness
 from app.evaluation.judge import JudgeProtocol
-
-
-@dataclass(frozen=True)
-class MetricResult:
-    name: str
-    score: float | None
-    details: dict = field(default_factory=dict)
+from app.evaluation.models import MetricResult, MetricStatus
 
 
 class Metric:
@@ -27,8 +19,21 @@ class FaithfulnessMetric:
         return MetricResult(
             name=self.name,
             score=result.score,
+            status=result.status,
+            threshold=0.9,
             details={"claims": result.claims, "elapsed_ms": result.elapsed_ms},
+            elapsed_ms=result.elapsed_ms,
+            token_usage=result.token_usage,
+            error_code=result.error_code,
         )
+
+
+class RegisteredMetric:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def evaluate(self, answer: str, contexts: list[str], judge: JudgeProtocol) -> MetricResult:
+        raise RuntimeError(f"{self.name} must be evaluated with its turn specification")
 
 
 METRIC_REGISTRY: dict[str, Metric] = {}
@@ -49,3 +54,8 @@ def list_metrics() -> list[str]:
 
 
 register_metric(FaithfulnessMetric())
+for _name in (
+    "answer_correctness", "answer_relevance", "required_fact_coverage", "forbidden_fact_matches",
+    "hit_at_k", "recall_at_k", "mrr", "chunk_hit_at_k", "forbidden_source_matches",
+):
+    register_metric(RegisteredMetric(_name))

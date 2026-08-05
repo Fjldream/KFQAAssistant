@@ -67,12 +67,17 @@ def _legacy_case_from_spec(case: EvaluationCaseSpec) -> EvaluationCase:
             EvaluationTurn(
                 question=turn.question,
                 expected_keywords=turn.keyword_anchors,
-                expected_source_keywords=turn.expected_source_ids,
-                forbidden_source_keywords=turn.forbidden_source_ids,
                 expect_images=turn.expect_images,
                 expect_no_answer=turn.expect_no_answer,
                 min_sources=turn.min_sources,
                 min_images=turn.min_images,
+                reference_answer=turn.reference_answer,
+                required_facts=[fact.model_dump() for fact in turn.required_facts],
+                keyword_anchors=turn.keyword_anchors,
+                forbidden_facts=turn.forbidden_facts,
+                expected_source_ids=turn.expected_source_ids,
+                expected_chunk_ids=turn.expected_chunk_ids,
+                forbidden_source_ids=turn.forbidden_source_ids,
             )
             for turn in case.turns
         ],

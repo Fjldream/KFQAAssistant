@@ -43,6 +43,8 @@ class SourceSnippet(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list)
     images: list[str] = Field(default_factory=list)
     score: float | None = None
+    source_id: str | None = None
+    chunk_ids: list[str] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):

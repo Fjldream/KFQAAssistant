@@ -1,9 +1,12 @@
+from dataclasses import replace
 from time import perf_counter
 from typing import Protocol
 
+from app.evaluation.answer_quality import evaluate_answer_quality
 from app.evaluation.judge import JudgeProtocol
 from app.evaluation.metrics_registry import get_metric
-from app.evaluation.models import CaseResult, EvaluationCase, EvaluationTurn, TurnResult
+from app.evaluation.models import CaseResult, EvaluationCase, EvaluationTurn, MetricResult, MetricStatus, TurnResult
+from app.evaluation.retrieval_metrics import evaluate_retrieval
 from app.rag.generation.answer_policy import is_no_answer
 from app.schemas.chat import ChatHistoryMessage, ChatResponse
 
@@ -66,12 +69,13 @@ def _evaluate_turn(
     faithfulness_score: float | None = None,
     faithfulness_claims: list[dict] | None = None,
     faithfulness_elapsed_ms: float = 0.0,
+    metric_results: list[MetricResult] | None = None,
 ) -> TurnResult:
-    answer_and_sources = f"{response.answer}\n{_source_search_text(response)}"
+    answer_text = response.answer
     source_text = _source_search_text(response)
     matched_keywords, missing_keywords = _match_required_groups(
-        answer_and_sources,
-        _build_required_groups(turn.expected_keywords, turn.expected_keyword_groups),
+        answer_text,
+        _build_required_groups(turn.keyword_anchors or turn.expected_keywords, turn.expected_keyword_groups),
     )
     matched_source_keywords, missing_source_keywords = _match_required_groups(
         source_text,
@@ -110,6 +114,7 @@ def _evaluate_turn(
         faithfulness_score=faithfulness_score,
         faithfulness_claims=faithfulness_claims or [],
         faithfulness_elapsed_ms=faithfulness_elapsed_ms,
+        metric_results=metric_results or [],
     )
 
 
@@ -129,11 +134,16 @@ def _build_failure_reasons(turn_results: list[TurnResult]) -> list[str]:
             reasons.append(f"第 {index} 轮图片数量不满足要求")
         if not result.no_answer_passed:
             reasons.append(f"第 {index} 轮拒答行为不符合预期")
+        for metric in result.metric_results:
+            if metric.status == MetricStatus.ERROR:
+                reasons.append(f"第 {index} 轮指标 {metric.name} 评估错误：{metric.error_code or 'unknown'}")
+            elif metric.status == MetricStatus.FAILED:
+                reasons.append(f"第 {index} 轮指标未达标：{metric.name}")
     return reasons
 
 
 # 执行一个完整评测用例，连续对话会把上一轮摘要和最近消息传给下一轮；
-# 语义评估开启时对非拒答轮次运行第一个已注册指标并写入 TurnResult。
+# 语义评估开启时运行所有已配置指标；每个指标独立决定用例是否通过。
 def evaluate_case(
     chain: ChainProtocol,
     case: EvaluationCase,
@@ -155,20 +165,27 @@ def evaluate_case(
             recent_messages=recent_messages,
         )
         elapsed_ms = (perf_counter() - turn_started) * 1000
+        metric_results: list[MetricResult] = []
         faithfulness_score = None
         faithfulness_claims: list[dict] = []
         faithfulness_elapsed_ms = 0.0
-        is_refusal = is_no_answer(response.answer) or not response.sources
-        if judge is not None and semantic_enabled and not is_refusal and metrics:
-            metric = get_metric(metrics[0])
-            result = metric.evaluate(
-                response.answer,
-                [source.snippet for source in response.sources],
-                judge,
-            )
-            faithfulness_score = result.score
-            faithfulness_claims = result.details.get("claims", [])
-            faithfulness_elapsed_ms = result.details.get("elapsed_ms", 0.0)
+        if judge is not None and semantic_enabled:
+            for metric_name in metrics:
+                get_metric(metric_name)
+        requested = set(metrics)
+        if requested & {"hit_at_k", "recall_at_k", "mrr", "chunk_hit_at_k", "forbidden_source_matches"}:
+            metric_results.extend(result for result in evaluate_retrieval(turn, response.sources) if result.name in requested)
+        if requested & {"answer_correctness", "answer_relevance", "required_fact_coverage", "forbidden_fact_matches"}:
+            if judge is not None and semantic_enabled:
+                metric_results.extend(result for result in evaluate_answer_quality(judge, turn, response.answer) if result.name in requested)
+        if "faithfulness" in requested:
+            if judge is not None and semantic_enabled:
+                result = get_metric("faithfulness").evaluate(response.answer, [source.snippet for source in response.sources], judge)
+                metric_results.append(result)
+                faithfulness_score = result.score
+                faithfulness_claims = result.details.get("claims", [])
+                faithfulness_elapsed_ms = result.elapsed_ms
+        metric_results = [_apply_priority_threshold(metric, case.priority) for metric in metric_results]
         turn_result = _evaluate_turn(
             turn,
             response,
@@ -176,7 +193,10 @@ def evaluate_case(
             faithfulness_score,
             faithfulness_claims,
             faithfulness_elapsed_ms,
+            metric_results,
         )
+        if any(metric.status in (MetricStatus.FAILED, MetricStatus.ERROR) for metric in metric_results):
+            turn_result = replace(turn_result, passed=False)
         turn_results.append(turn_result)
 
         recent_messages = [
@@ -197,3 +217,11 @@ def evaluate_case(
         failure_reasons=_build_failure_reasons(turn_results),
         elapsed_ms=(perf_counter() - case_started) * 1000,
     )
+
+
+def _apply_priority_threshold(metric: MetricResult, priority: str) -> MetricResult:
+    if metric.name == "required_fact_coverage" and priority == "P0":
+        return replace(metric, threshold=1.0, status=MetricStatus.PASSED if metric.score == 1.0 else MetricStatus.FAILED)
+    if metric.name == "faithfulness" and metric.status == MetricStatus.PASSED and metric.score is not None and metric.score < 0.9:
+        return replace(metric, status=MetricStatus.FAILED, threshold=0.9)
+    return metric

@@ -7,13 +7,12 @@ from app.evaluation.metrics_registry import (
     register_metric,
 )
 from app.evaluation.judge import JudgeProtocol
+from app.evaluation.models import MetricStatus
 
 
 class FakeJudge:
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict:
-        if "拆" in system_prompt:
-            return {"claims": ["句1", "句2"]}
-        return {"supported": True, "evidence": "依据"}
+        return {"claims": [{"claim": "句1", "supported": True, "evidence": "依据"}, {"claim": "句2", "supported": True, "evidence": "依据"}]}
 
 
 def test_faithfulness_metric_registered_by_default():
@@ -27,6 +26,7 @@ def test_faithfulness_metric_evaluate_returns_metric_result():
     assert result.score == 1.0
     assert len(result.details["claims"]) == 2
     assert "elapsed_ms" in result.details
+    assert result.status == MetricStatus.PASSED
 
 
 def test_register_and_get_metric_roundtrip():

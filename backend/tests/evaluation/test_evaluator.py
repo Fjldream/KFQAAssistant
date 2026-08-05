@@ -1,5 +1,5 @@
 from app.evaluation.evaluator import evaluate_case
-from app.evaluation.models import EvaluationCase, EvaluationTurn
+from app.evaluation.models import EvaluationCase, EvaluationTurn, MetricStatus
 from app.schemas.chat import ChatResponse, SourceSnippet
 
 
@@ -97,6 +97,69 @@ def test_evaluate_turn_accepts_keyword_groups():
     assert result.passed is True
     assert result.turn_results[0].matched_keywords == ["新建按钮", "名称"]
     assert result.turn_results[0].matched_source_keywords == ["数采管理"]
+
+
+def test_evaluate_turn_does_not_match_answer_keyword_inside_sources():
+    chain = FakeChain([
+        ChatResponse(
+            answer="请按手册步骤操作。",
+            sources=[SourceSnippet(title="手册", source_path="manual.md", snippet="请先填写名称。")],
+        )
+    ])
+    case = EvaluationCase(
+        id="answer-only-anchor",
+        category="测试",
+        turns=[EvaluationTurn(question="怎么做？", expected_keywords=["名称"])],
+    )
+
+    result = evaluate_case(chain, case)
+
+    assert result.passed is False
+    assert result.turn_results[0].missing_keywords == ["名称"]
+
+
+def test_evaluate_case_applies_every_configured_metric_and_p0_fact_threshold():
+    class Judge:
+        def complete_json(self, system_prompt, user_prompt):
+            if "correctness" in system_prompt:
+                return {
+                    "correctness": 1.0,
+                    "relevance": 1.0,
+                    "facts": [{"id": "entry", "covered": True}, {"id": "name", "covered": False}],
+                    "forbidden_fact_matches": [],
+                }
+            return {"claims": [{"claim": "工程需要名称", "supported": True, "evidence": "填写名称"}]}
+
+    chain = FakeChain([
+        ChatResponse(
+            answer="进入数采管理后创建工程。",
+            sources=[SourceSnippet(title="t", source_path="doc-a.md", snippet="填写名称", source_id="doc-a", chunk_ids=["chunk-a"])],
+        )
+    ])
+    case = EvaluationCase(
+        id="all-metrics",
+        category="测试",
+        priority="P0",
+        turns=[EvaluationTurn(
+            question="如何创建工程？",
+            reference_answer="进入数采管理后创建工程并填写名称。",
+            required_facts=[{"id": "entry", "text": "进入数采管理"}, {"id": "name", "text": "填写名称"}],
+            expected_source_ids=["doc-a"],
+        )],
+    )
+
+    result = evaluate_case(
+        chain,
+        case,
+        judge=Judge(),
+        metrics=("answer_correctness", "required_fact_coverage", "hit_at_k", "faithfulness"),
+    )
+
+    metrics = {metric.name: metric for metric in result.turn_results[0].metric_results}
+    assert set(metrics) == {"answer_correctness", "required_fact_coverage", "hit_at_k", "faithfulness"}
+    assert metrics["required_fact_coverage"].threshold == 1.0
+    assert metrics["required_fact_coverage"].status == MetricStatus.FAILED
+    assert result.passed is False
 
 
 # 验证不应回答的问题必须拒答，并且不能返回资料来源。

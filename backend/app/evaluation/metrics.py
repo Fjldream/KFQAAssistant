@@ -1,7 +1,7 @@
 from statistics import mean
 from uuid import uuid4
 
-from app.evaluation.models import CaseResult, EvaluationRunSummary
+from app.evaluation.models import CaseResult, EvaluationRunSummary, MetricStatus
 
 
 # 计算通过率，避免调用处重复处理空列表除零问题。
@@ -47,10 +47,16 @@ def summarize_case_results(results: list[CaseResult]) -> EvaluationRunSummary:
         for turn in result.turn_results
         if turn.faithfulness_score is not None
     ]
+    has_metric_error = any(
+        metric.status == MetricStatus.ERROR
+        for result in results
+        for turn in result.turn_results
+        for metric in turn.metric_results
+    )
 
     return EvaluationRunSummary(
         run_id=f"eval-{uuid4().hex}",
-        status="completed",
+        status="INVALID" if has_metric_error else "completed",
         case_total=case_total,
         case_passed=case_passed,
         pass_rate=_pass_rate(case_passed, case_total),

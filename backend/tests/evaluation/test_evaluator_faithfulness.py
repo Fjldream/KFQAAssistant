@@ -14,9 +14,7 @@ class FakeChain:
 
 class FakeJudge:
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict:
-        if "拆" in system_prompt:
-            return {"claims": ["声明一"]}
-        return {"supported": True, "evidence": "依据"}
+        return {"claims": [{"claim": "声明一", "supported": True, "evidence": "依据"}]}
 
 
 def _make_case() -> EvaluationCase:

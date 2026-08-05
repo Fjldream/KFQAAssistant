@@ -47,11 +47,15 @@ def _build_sources(
                 evidence_ids=[evidence_id],
                 images=images,
                 score=item.score,
+                source_id=source_path,
+                chunk_ids=[item.chunk.id],
             )
             continue
 
         if evidence_id not in existing.evidence_ids:
             existing.evidence_ids.append(evidence_id)
+        if item.chunk.id not in existing.chunk_ids:
+            existing.chunk_ids.append(item.chunk.id)
         for image in item.chunk.images:
             if total_images >= max_images_per_answer:
                 break

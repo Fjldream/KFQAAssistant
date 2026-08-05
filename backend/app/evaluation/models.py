@@ -1,4 +1,25 @@
 from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
+
+
+class MetricStatus(str, Enum):
+    PASSED = "PASSED"
+    FAILED = "FAILED"
+    ERROR = "ERROR"
+    SKIPPED = "SKIPPED"
+
+
+@dataclass(frozen=True)
+class MetricResult:
+    name: str
+    score: float | None
+    status: MetricStatus
+    threshold: float | None = None
+    details: dict[str, Any] = field(default_factory=dict)
+    elapsed_ms: float = 0.0
+    token_usage: Any | None = None
+    error_code: str | None = None
 
 
 # 表示一个用户问题对应的单轮评测规则，是单轮和连续对话评测的最小单元。
@@ -14,6 +35,13 @@ class EvaluationTurn:
     expect_no_answer: bool = False
     min_sources: int = 0
     min_images: int = 0
+    reference_answer: str = ""
+    required_facts: list[dict] = field(default_factory=list)
+    keyword_anchors: list[str] = field(default_factory=list)
+    forbidden_facts: list[str] = field(default_factory=list)
+    expected_source_ids: list[str] = field(default_factory=list)
+    expected_chunk_ids: list[str] = field(default_factory=list)
+    forbidden_source_ids: list[str] = field(default_factory=list)
 
 
 # 表示一个完整评测用例，单轮用例包含一轮，连续对话用例包含多轮。
@@ -55,6 +83,7 @@ class TurnResult:
     faithfulness_score: float | None = None
     faithfulness_claims: list[dict] = field(default_factory=list)
     faithfulness_elapsed_ms: float = 0.0
+    metric_results: list[MetricResult] = field(default_factory=list)
 
 
 # 表示一个评测用例的整体结果，连续对话时会包含多轮 TurnResult。
