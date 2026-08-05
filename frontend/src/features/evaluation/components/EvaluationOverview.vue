@@ -1,12 +1,13 @@
 <template>
   <section class="ke-overview" aria-label="评测总览">
     <div class="ke-metric">
-      <span>通过率</span>
-      <strong>{{ formatPercent(summary?.pass_rate ?? 0) }}</strong>
+      <span>运行结果</span>
+      <strong :class="outcomeClass">{{ outcomeLabel }}</strong>
+      <small v-if="summary" data-testid="run-status">{{ summary.status.toUpperCase() }}</small>
     </div>
     <div class="ke-metric">
-      <span>用例</span>
-      <strong>{{ summary?.case_passed ?? 0 }}/{{ summary?.case_total ?? 0 }}</strong>
+      <span>用例通过率</span>
+      <strong>{{ formatPercent(summary?.pass_rate ?? 0) }}</strong>
     </div>
     <div class="ke-metric">
       <span>P0</span>
@@ -18,11 +19,7 @@
     </div>
     <div class="ke-metric">
       <span>平均忠实度</span>
-      <strong>{{ formatPercent(avgFaithfulness ?? 0) }}</strong>
-    </div>
-    <div class="ke-gate" :class="gatePassed ? 'is-pass' : 'is-fail'">
-      <span>门禁</span>
-      <strong>{{ gatePassed ? "通过" : "未通过" }}</strong>
+      <strong>{{ avgFaithfulness === null ? "未评估" : formatPercent(avgFaithfulness) }}</strong>
     </div>
   </section>
 </template>
@@ -36,12 +33,14 @@ const props = defineProps<{
 }>();
 
 const summary = computed(() => props.detail?.summary ?? null);
-const gatePassed = computed(() => props.detail?.gate_result.passed ?? false);
-// 运行摘要可能携带平均忠实度（可选字段），类型中未声明故做窄化访问。
-const avgFaithfulness = computed<number | null>(() => {
-  const value = (props.detail?.summary as { avg_faithfulness_score?: number | null } | null)?.avg_faithfulness_score;
-  return typeof value === "number" ? value : null;
+const avgFaithfulness = computed(() => summary.value?.avg_faithfulness_score ?? null);
+const outcomeLabel = computed(() => {
+  const outcome = props.detail?.gate_result.outcome;
+  if (outcome === "INVALID") return "无效";
+  if (outcome === "FAILED") return "质量未通过";
+  return outcome === "PASSED" ? "通过" : "未开始";
 });
+const outcomeClass = computed(() => props.detail?.gate_result.outcome === "PASSED" ? "is-pass" : props.detail?.gate_result.outcome === "INVALID" ? "is-invalid" : "is-fail");
 
 // 将小数通过率格式化成百分比文本。
 function formatPercent(value: number): string {

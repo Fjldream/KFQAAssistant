@@ -1,58 +1,51 @@
 import { requestJson } from "../../api/client";
 import type { ApiSettings } from "../../api/types";
 import type {
+  ApproveBaselineRequest,
+  BaselineApproval,
   ComparisonResult,
-  CreateEvaluationRunRequest,
-  RunEvaluationCaseRequest,
-  SaveProgressiveRunRequest,
-  CaseResult,
+  CreateRunRequest,
   EvaluationCase,
-  EvaluationOverviewResponse,
   EvaluationRunDetail,
   EvaluationRunSummary,
+  EvaluationSuite,
 } from "./types";
 
 export interface EvaluationApiClient {
-  listEvaluationCases: () => Promise<EvaluationCase[]>;
-  getEvaluationOverview: () => Promise<EvaluationOverviewResponse>;
+  listSuites: () => Promise<EvaluationSuite[]>;
   listEvaluationRuns: (limit?: number) => Promise<EvaluationRunSummary[]>;
-  createEvaluationRun: (request: CreateEvaluationRunRequest) => Promise<EvaluationRunDetail>;
-  runEvaluationCase: (
-    caseId: string,
-    request: RunEvaluationCaseRequest,
-    signal?: AbortSignal,
-  ) => Promise<CaseResult>;
-  saveProgressiveRun: (request: SaveProgressiveRunRequest) => Promise<EvaluationRunDetail>;
-  getEvaluationRun: (runId: string) => Promise<EvaluationRunDetail>;
-  compareEvaluationRun: (runId: string, baselineRunId?: string) => Promise<ComparisonResult>;
+  createRun: (request: CreateRunRequest) => Promise<EvaluationRunSummary>;
+  getRun: (runId: string) => Promise<EvaluationRunDetail>;
+  cancelRun: (runId: string) => Promise<EvaluationRunSummary>;
+  listBaselines: () => Promise<BaselineApproval[]>;
+  approveBaseline: (runId: string, request: ApproveBaselineRequest) => Promise<BaselineApproval>;
+  compareRun: (runId: string, baselineRunId?: string) => Promise<ComparisonResult>;
 }
 
-// 创建评测中心 API 客户端，复用全局请求封装以保持鉴权和错误处理一致。
 export function createEvaluationApiClient(settings: ApiSettings): EvaluationApiClient {
   return {
-    listEvaluationCases: () => requestJson<EvaluationCase[]>(settings, "/api/evaluation/cases"),
-    getEvaluationOverview: () => requestJson<EvaluationOverviewResponse>(settings, "/api/evaluation/overview"),
+    // The existing read-only case endpoint is the trusted source for the current core Suite.
+    listSuites: async () => {
+      const cases = await requestJson<EvaluationCase[]>(settings, "/api/evaluation/cases");
+      return [{ id: "core", cases }];
+    },
     listEvaluationRuns: (limit = 20) =>
       requestJson<EvaluationRunSummary[]>(settings, `/api/evaluation/runs?limit=${limit}`),
-    createEvaluationRun: (request: CreateEvaluationRunRequest) =>
-      requestJson<EvaluationRunDetail>(settings, "/api/evaluation/runs", {
+    createRun: (request) =>
+      requestJson<EvaluationRunSummary>(settings, "/api/evaluation/runs", {
         method: "POST",
         body: JSON.stringify(request),
       }),
-    runEvaluationCase: (caseId: string, request: RunEvaluationCaseRequest, signal?: AbortSignal) =>
-      requestJson<CaseResult>(settings, `/api/evaluation/cases/${encodeURIComponent(caseId)}/run`, {
-        method: "POST",
-        body: JSON.stringify(request),
-        signal,
-      }),
-    saveProgressiveRun: (request: SaveProgressiveRunRequest) =>
-      requestJson<EvaluationRunDetail>(settings, "/api/evaluation/runs/progressive", {
+    getRun: (runId) => requestJson<EvaluationRunDetail>(settings, `/api/evaluation/runs/${encodeURIComponent(runId)}`),
+    cancelRun: (runId) =>
+      requestJson<EvaluationRunSummary>(settings, `/api/evaluation/runs/${encodeURIComponent(runId)}/cancel`, { method: "POST" }),
+    listBaselines: () => requestJson<BaselineApproval[]>(settings, "/api/evaluation/baselines"),
+    approveBaseline: (runId, request) =>
+      requestJson<BaselineApproval>(settings, `/api/evaluation/runs/${encodeURIComponent(runId)}/approve-baseline`, {
         method: "POST",
         body: JSON.stringify(request),
       }),
-    getEvaluationRun: (runId: string) =>
-      requestJson<EvaluationRunDetail>(settings, `/api/evaluation/runs/${encodeURIComponent(runId)}`),
-    compareEvaluationRun: (runId: string, baselineRunId?: string) => {
+    compareRun: (runId, baselineRunId) => {
       const query = baselineRunId ? `?baseline_run_id=${encodeURIComponent(baselineRunId)}` : "";
       return requestJson<ComparisonResult>(settings, `/api/evaluation/runs/${encodeURIComponent(runId)}/compare${query}`);
     },

@@ -20,6 +20,11 @@
           <span>{{ item.passed ? "通过" : "失败" }}</span>
         </header>
         <p v-for="reason in item.failure_reasons" :key="reason" class="ke-reason">{{ reason }}</p>
+        <ul v-if="item.metric_results.length" class="ke-metrics">
+          <li v-for="metric in item.metric_results" :key="metric.name" :class="metric.status === 'ERROR' ? 'ke-metric-error' : ''">
+            {{ metricGroup(metric.name) }} · {{ metric.name }}：{{ metric.status === "ERROR" ? `错误${metric.error_code ? ` (${metric.error_code})` : ""}` : metric.status }}
+          </li>
+        </ul>
         <details v-for="(turn, index) in item.turn_results" :key="`${item.case_id}-${index}`">
           <summary>第 {{ index + 1 }} 轮：{{ turn.question }}</summary>
           <div class="ke-turn">
@@ -31,6 +36,7 @@
             >
               忠实度：{{ Math.round(turn.faithfulness_score * 100) }}%
             </p>
+            <p v-else class="ke-faithfulness">忠实度：未评估</p>
             <ul v-if="turn.faithfulness_claims && turn.faithfulness_claims.length" class="ke-claims">
               <li
                 v-for="(claim, i) in turn.faithfulness_claims.filter((c) => !c.supported)"
@@ -44,6 +50,7 @@
         </details>
       </article>
     </div>
+    <details v-if="detail?.snapshot" class="ke-snapshot"><summary>运行快照与基准标识</summary><pre>{{ JSON.stringify(detail.snapshot, null, 2) }}</pre></details>
   </section>
 </template>
 
@@ -53,10 +60,21 @@ import type { EvaluationRunDetail } from "../types";
 defineProps<{
   detail: EvaluationRunDetail | null;
 }>();
+
+function metricGroup(name: string): string {
+  if (["keyword", "source", "image", "no_answer", "required_fact_coverage"].some((part) => name.includes(part))) return "硬规则";
+  if (["faithfulness"].some((part) => name.includes(part))) return "忠实度";
+  if (["retrieval", "hit_at_k", "mrr", "recall"].some((part) => name.includes(part))) return "检索";
+  if (["latency", "token", "cost"].some((part) => name.includes(part))) return "系统";
+  return "答案质量";
+}
 </script>
 
 <style scoped>
 .ke-claim-hallucination {
   color: var(--ka-red, red);
 }
+.ke-metric-error { color: var(--ka-red, red); }
+.ke-snapshot { padding: 12px 6px; }
+.ke-snapshot pre { overflow: auto; white-space: pre-wrap; }
 </style>

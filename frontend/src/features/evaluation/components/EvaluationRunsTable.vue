@@ -15,9 +15,9 @@
       >
         <span class="ke-row__main">
           <strong>{{ run.run_id }}</strong>
-          <small>{{ run.status }} · {{ run.case_passed }}/{{ run.case_total }}</small>
+          <small>{{ run.status.toUpperCase() }} · {{ run.case_passed }}/{{ run.case_total }}</small>
         </span>
-        <span class="ke-badge" :class="run.pass_rate >= 0.8 ? 'is-pass' : 'is-fail'">
+        <span class="ke-badge" :class="run.status === 'INVALID' ? 'is-invalid' : run.pass_rate >= 0.8 ? 'is-pass' : 'is-fail'">
           {{ formatPercent(run.pass_rate) }}
         </span>
       </button>

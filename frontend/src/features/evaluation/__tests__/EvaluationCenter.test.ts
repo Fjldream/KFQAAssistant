@@ -1,213 +1,166 @@
-import { mount } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import EvaluationCenter from "../EvaluationCenter.vue";
 import type { EvaluationApiClient } from "../api";
+import type { EvaluationRunDetail, EvaluationRunSummary, GateOutcome } from "../types";
+
+function run(run_id: string, status: EvaluationRunSummary["status"]): EvaluationRunSummary {
+  return {
+    run_id,
+    status,
+    suite_id: "core",
+    mode: "calibration",
+    case_total: 1,
+    case_passed: status === "completed" ? 1 : 0,
+    pass_rate: status === "completed" ? 1 : 0,
+    p0_total: 1,
+    p0_passed: status === "completed" ? 1 : 0,
+    p95_latency_ms: 120,
+    avg_faithfulness_score: null,
+  };
+}
+
+function detail(runId: string, status: EvaluationRunSummary["status"], outcome: GateOutcome = "PASSED"): EvaluationRunDetail {
+  return {
+    summary: run(runId, status),
+    gate_result: { outcome, reasons: outcome === "FAILED" ? ["P0 failed"] : [] },
+    case_results: [
+      {
+        case_id: "single.collect.create",
+        category: "数采管理",
+        priority: "P0",
+        case_type: "single",
+        passed: outcome === "PASSED",
+        failure_reasons: outcome === "FAILED" ? ["答案缺少关键步骤"] : [],
+        turn_results: [
+          {
+            question: "如何创建采集工程？",
+            answer: "点击新建工程。",
+            passed: outcome === "PASSED",
+            faithfulness_score: null,
+            faithfulness_claims: [],
+            metric_results: [],
+          },
+        ],
+        metric_results: [],
+      },
+    ],
+  };
+}
 
 function createFakeClient(): EvaluationApiClient {
   return {
-    listEvaluationCases: vi.fn().mockResolvedValue([
-      {
+    listSuites: vi.fn().mockResolvedValue([{
+      id: "core",
+      version: "v1",
+      cases: [{
         id: "single.collect.create",
         category: "数采管理",
         priority: "P0",
         case_type: "single",
-        tags: ["smoke"],
-        turns: [{ question: "如何创建采集工程？", expected_keywords: ["新建工程"] }],
-      },
-    ]),
-    getEvaluationOverview: vi.fn().mockResolvedValue({
-      latest: {
-        summary: {
-          run_id: "run-1",
-          status: "completed",
-          case_total: 1,
-          case_passed: 1,
-          pass_rate: 1,
-          p0_total: 1,
-          p0_passed: 1,
-          avg_latency_ms: 120,
-          p95_latency_ms: 120,
-        },
-        gate_result: { passed: true, reasons: [] },
-        case_results: [
-          {
-            case_id: "single.collect.create",
-            category: "数采管理",
-            priority: "P0",
-            case_type: "single",
-            passed: true,
-            turn_results: [{ question: "如何创建采集工程？", answer: "点击新建工程。", passed: true }],
-            failure_reasons: [],
-            elapsed_ms: 120,
-          },
-        ],
-      },
-      previous_run_id: null,
-      comparison: null,
-    }),
-    listEvaluationRuns: vi.fn().mockResolvedValue([
-      {
-        run_id: "run-1",
-        status: "completed",
-        case_total: 1,
-        case_passed: 1,
-        pass_rate: 1,
-      },
-    ]),
-    createEvaluationRun: vi.fn().mockResolvedValue({
-      summary: { run_id: "run-2", status: "completed", case_total: 1, case_passed: 1, pass_rate: 1 },
-      gate_result: { passed: true, reasons: [] },
-      case_results: [],
-    }),
-    runEvaluationCase: vi.fn().mockResolvedValue({
-      case_id: "single.collect.create",
-      category: "数采管理",
-      priority: "P0",
-      case_type: "single",
-      passed: true,
-      turn_results: [{ question: "如何创建采集工程？", answer: "点击新建工程。", passed: true }],
-      failure_reasons: [],
-      elapsed_ms: 120,
-    }),
-    saveProgressiveRun: vi.fn().mockResolvedValue({
-      summary: { run_id: "run-2", status: "completed", case_total: 1, case_passed: 1, pass_rate: 1 },
-      gate_result: { passed: true, reasons: [] },
-      case_results: [],
-    }),
-    getEvaluationRun: vi.fn().mockResolvedValue({
-      summary: { run_id: "run-1", status: "completed", case_total: 1, case_passed: 1, pass_rate: 1 },
-      gate_result: { passed: true, reasons: [] },
-      case_results: [],
-    }),
-    compareEvaluationRun: vi.fn().mockResolvedValue({ pass_rate_delta: 0 }),
+        tags: [],
+        turns: [{ question: "如何创建采集工程？" }],
+      }],
+    }]),
+    listEvaluationRuns: vi.fn().mockResolvedValue([run("run-1", "completed")]),
+    createRun: vi.fn().mockResolvedValue(run("run-2", "created")),
+    getRun: vi.fn().mockResolvedValue(detail("run-1", "completed")),
+    cancelRun: vi.fn().mockResolvedValue(run("run-2", "cancelled")),
+    listBaselines: vi.fn().mockResolvedValue([{ suite_id: "core", run_id: "baseline-1", approved_by: "release", note: null, approved_at: "2026-08-05T00:00:00Z" }]),
+    approveBaseline: vi.fn().mockResolvedValue({ suite_id: "core", run_id: "run-2", approved_by: "release", note: null, approved_at: "2026-08-05T00:00:00Z" }),
+    compareRun: vi.fn().mockResolvedValue({ baseline_run_id: "baseline-1", pass_rate_delta: 0.1, recovered_case_ids: ["single.collect.create"] }),
   };
 }
 
-describe("EvaluationCenter", () => {
-  it("展示评测总览、用例列表和运行入口", async () => {
-    const client = createFakeClient();
-    const wrapper = mount(EvaluationCenter, { props: { client } });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+async function settle(): Promise<void> {
+  await flushPromises();
+}
 
-    expect(wrapper.text()).toContain("评测中心");
-    expect(wrapper.text()).toContain("通过率");
-    expect(wrapper.text()).toContain("single.collect.create");
-    expect(wrapper.text()).toContain("运行评测");
-  });
-
-  it("点击运行评测会调用 API 并展示新报告", async () => {
-    const client = createFakeClient();
-    const wrapper = mount(EvaluationCenter, { props: { client } });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    await wrapper.get('[data-testid="run-evaluation"]').trigger("click");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(client.runEvaluationCase).toHaveBeenCalledWith("single.collect.create", { include_dialogues: true }, expect.anything());
-    expect(client.saveProgressiveRun).toHaveBeenCalled();
-    expect(wrapper.text()).toContain("run-2");
-  });
-
-  it("运行评测期间展示状态提示", async () => {
-    const client = createFakeClient();
-    let resolveRun: (value: unknown) => void = () => {};
-    client.runEvaluationCase = vi.fn(
-      () =>
-        new Promise((resolve) => {
-          resolveRun = resolve;
-        }),
-    ) as EvaluationApiClient["runEvaluationCase"];
-    const wrapper = mount(EvaluationCenter, { props: { client } });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    await wrapper.get('[data-testid="run-evaluation"]').trigger("click");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(wrapper.text()).toContain("正在运行评测");
-    expect(wrapper.text()).toContain("运行中");
-    resolveRun({
-      case_id: "single.collect.create",
-      category: "数采管理",
-      priority: "P0",
-      case_type: "single",
-      passed: true,
-      turn_results: [],
-    });
-  });
-
-  it("运行失败时展示后端错误", async () => {
-    const client = createFakeClient();
-    client.runEvaluationCase = vi.fn().mockRejectedValue(new Error("大模型服务暂时不可用，请稍后重试。"));
-    const wrapper = mount(EvaluationCenter, { props: { client } });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    await wrapper.get('[data-testid="run-evaluation"]').trigger("click");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(wrapper.text()).toContain("大模型服务暂时不可用，请稍后重试。");
-    expect(wrapper.text()).toContain("接口错误");
-  });
-
-  it("可以中止评测并停止后续保存", async () => {
-    const client = createFakeClient();
-    let rejectRun: (reason: unknown) => void = () => {};
-    client.runEvaluationCase = vi.fn(
-      () =>
-        new Promise((_resolve, reject) => {
-          rejectRun = reject;
-        }),
-    ) as EvaluationApiClient["runEvaluationCase"];
-    const wrapper = mount(EvaluationCenter, { props: { client } });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    await wrapper.get('[data-testid="run-evaluation"]').trigger("click");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await wrapper.get('[data-testid="abort-evaluation"]').trigger("click");
-    rejectRun(new DOMException("Aborted", "AbortError"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(wrapper.text()).toContain("已中止");
-    expect(client.saveProgressiveRun).not.toHaveBeenCalled();
-  });
+afterEach(() => {
+  vi.useRealTimers();
 });
 
-import EvaluationRunDetail from "../components/EvaluationRunDetail.vue";
+describe("EvaluationCenter", () => {
+  it("creates a backend run and polls until completed", async () => {
+    const client = createFakeClient();
+    const wrapper = mount(EvaluationCenter, { props: { client } });
+    await settle();
+    vi.useFakeTimers();
+    client.getRun = vi.fn()
+      .mockResolvedValueOnce(detail("run-2", "running"))
+      .mockResolvedValueOnce(detail("run-2", "completed"));
 
-describe("EvaluationRunDetail faithfulness", () => {
-  const detail = {
-    summary: { run_id: "r1", status: "completed", case_total: 1, case_passed: 1, pass_rate: 1, avg_faithfulness_score: 0.5 },
-    gate_result: { passed: true, reasons: [] },
-    case_results: [
-      {
-        case_id: "c1",
-        category: "cat",
-        priority: "P1",
-        case_type: "single",
-        passed: true,
-        failure_reasons: [],
-        turn_results: [
-          {
-            question: "问题？",
-            answer: "回答。",
-            standalone_question: null,
-            passed: true,
-            faithfulness_score: 0.5,
-            faithfulness_claims: [
-              { claim: "编造句", supported: false, evidence: "" },
-              { claim: "有据句", supported: true, evidence: "依据" },
-            ],
-            faithfulness_elapsed_ms: 100,
-          },
-        ],
-      },
-    ],
-  };
+    await wrapper.get('[data-testid="run-evaluation"]').trigger("click");
+    await vi.advanceTimersByTimeAsync(2000);
 
-  it("renders faithfulness score and hallucinated claims", () => {
-    const wrapper = mount(EvaluationRunDetail, { props: { detail } });
-    expect(wrapper.text()).toContain("忠实度");
-    expect(wrapper.text()).toContain("50%");
-    expect(wrapper.text()).toContain("编造句");
-    expect(wrapper.text()).not.toContain("有据句");
+    expect(client.createRun).toHaveBeenCalledWith({ suite_id: "core", mode: "calibration" });
+    expect(wrapper.text()).toContain("COMPLETED");
+    expect(wrapper.text()).toContain("未评估");
+  });
+
+  it("cancels an active backend run", async () => {
+    const client = createFakeClient();
+    const wrapper = mount(EvaluationCenter, { props: { client } });
+    await settle();
+    client.createRun = vi.fn().mockResolvedValue(run("run-2", "running"));
+    client.getRun = vi.fn().mockResolvedValue(detail("run-2", "running"));
+
+    await wrapper.get('[data-testid="run-evaluation"]').trigger("click");
+    await settle();
+    await wrapper.get('[data-testid="abort-evaluation"]').trigger("click");
+    await settle();
+
+    expect(client.cancelRun).toHaveBeenCalledWith("run-2");
+    expect(wrapper.text()).toContain("CANCELLED");
+  });
+
+  it("distinguishes invalid infrastructure results from failed quality gates", async () => {
+    const client = createFakeClient();
+    client.listEvaluationRuns = vi.fn().mockResolvedValue([run("run-invalid", "INVALID"), run("run-failed", "completed")]);
+    client.getRun = vi.fn((id: string) => Promise.resolve(id === "run-invalid" ? detail(id, "INVALID", "INVALID") : detail(id, "completed", "FAILED")));
+    const wrapper = mount(EvaluationCenter, { props: { client } });
+    await settle();
+
+    expect(wrapper.text()).toContain("无效");
+    await wrapper.findAll(".ke-row")[2].trigger("click");
+    await settle();
+    expect(wrapper.text()).toContain("质量未通过");
+  });
+
+  it("approves only a valid completed calibration run for the selected suite", async () => {
+    const client = createFakeClient();
+    client.getRun = vi.fn().mockResolvedValue(detail("run-1", "INVALID", "INVALID"));
+    const wrapper = mount(EvaluationCenter, { props: { client } });
+    await settle();
+
+    expect(wrapper.get('[data-testid="approve-baseline"]').attributes("disabled")).toBeDefined();
+    client.getRun = vi.fn().mockResolvedValue(detail("run-1", "completed"));
+    await wrapper.findAll(".ke-row")[1].trigger("click");
+    await settle();
+    expect(wrapper.get('[data-testid="approve-baseline"]').attributes("disabled")).toBeUndefined();
+    await wrapper.get('[data-testid="approve-baseline"]').trigger("click");
+    await wrapper.get('[data-testid="approver-name"]').setValue("release manager");
+    await wrapper.get("form").trigger("submit");
+    await settle();
+
+    expect(client.approveBaseline).toHaveBeenCalledWith("run-1", { approved_by: "release manager", note: undefined });
+    expect(client.listBaselines).toHaveBeenCalledTimes(2);
+    expect(client.compareRun).toHaveBeenCalledWith("run-1");
+  });
+
+  it("stops polling when unmounted", async () => {
+    const client = createFakeClient();
+    const wrapper = mount(EvaluationCenter, { props: { client } });
+    await settle();
+    vi.useFakeTimers();
+    client.createRun = vi.fn().mockResolvedValue(run("run-2", "created"));
+    client.getRun = vi.fn().mockResolvedValue(detail("run-2", "running"));
+
+    await wrapper.get('[data-testid="run-evaluation"]').trigger("click");
+    await settle();
+    wrapper.unmount();
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(client.getRun).toHaveBeenCalledTimes(1);
   });
 });
