@@ -1,10 +1,13 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from app.evaluation.models import (
     CaseResult,
     EvaluationRunSummary,
     GateResult,
+    MetricResult,
+    MetricStatus,
     TurnResult,
 )
 from app.evaluation.repository import EvaluationRepository
@@ -88,3 +91,23 @@ def test_repository_migrates_old_schema(tmp_path: Path):
     assert "avg_faithfulness_score" in run_cols
     assert "knowledge_base_id" in run_cols
     conn.close()
+
+
+def test_repository_checkpoints_case_and_generic_metrics_together(tmp_path: Path):
+    repository = EvaluationRepository(tmp_path / "eval.db")
+    run_id = repository.create_run("core", "v1", "hash", {}, "CALIBRATION", case_total=1)
+    repository.transition_run(run_id, "running")
+    metrics = [MetricResult(name="answer_correctness", score=0.9, status=MetricStatus.PASSED, threshold=0.8, details={"judge": "ok"})]
+    case = CaseResult(
+        case_id="c1", category="cat", priority="P1", case_type="single", passed=True,
+        turn_results=[replace(_turn(), metric_results=metrics)],
+    )
+
+    repository.save_case_result(run_id, case)
+
+    with repository._connect() as connection:
+        row = connection.execute("SELECT metric_name, score, details_json FROM evaluation_metric_results WHERE run_id = ?", (run_id,)).fetchone()
+    assert (row["metric_name"], row["score"], row["details_json"]) == ("answer_correctness", 0.9, '{"judge": "ok"}')
+    detail = repository.get_run(run_id)
+    assert detail is not None
+    assert detail.case_results[0].turn_results[0].metric_results == metrics

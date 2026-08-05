@@ -1,4 +1,7 @@
+import sqlite3
 from pathlib import Path
+
+import pytest
 
 from app.evaluation.gates import evaluate_gates
 from app.evaluation.models import CaseResult, EvaluationRunSummary, TurnResult
@@ -152,3 +155,65 @@ def test_repository_get_previous_completed_run(tmp_path: Path):
 
     assert previous is not None
     assert previous.summary.run_id == "run-1"
+
+
+def test_repository_upgrades_old_database_and_preserves_existing_run(tmp_path: Path):
+    db_path = tmp_path / "eval.db"
+    connection = sqlite3.connect(db_path)
+    connection.executescript("""
+        CREATE TABLE evaluation_runs (
+            id TEXT PRIMARY KEY, status TEXT NOT NULL, started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL, case_total INTEGER NOT NULL, case_passed INTEGER NOT NULL,
+            pass_rate REAL NOT NULL, p0_total INTEGER NOT NULL, p0_passed INTEGER NOT NULL,
+            avg_latency_ms REAL NOT NULL, p95_latency_ms REAL NOT NULL, gate_passed INTEGER NOT NULL,
+            gate_reasons_json TEXT NOT NULL, config_json TEXT NOT NULL, error TEXT
+        );
+        CREATE TABLE evaluation_turn_results (id TEXT PRIMARY KEY, run_id TEXT NOT NULL, case_result_id TEXT NOT NULL);
+        INSERT INTO evaluation_runs VALUES ('legacy', 'completed', 'start', 'finish', 1, 1, 1, 1, 1, 1, 1, 1, '[]', '{}', NULL);
+    """)
+    connection.close()
+
+    repository = EvaluationRepository(db_path)
+    repository.initialize()
+
+    with repository._connect() as connection:
+        tables = {row["name"] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        assert connection.execute("SELECT id FROM evaluation_runs WHERE id = 'legacy'").fetchone()["id"] == "legacy"
+        assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+    assert {"evaluation_case_results", "evaluation_metric_results", "evaluation_baselines"} <= tables
+
+
+def test_repository_rejects_empty_run_and_approved_baselines_are_immutable(tmp_path: Path):
+    repository = EvaluationRepository(tmp_path / "eval.db")
+
+    with pytest.raises(ValueError, match="at least one case"):
+        repository.create_run("core", "v1", "hash", {}, "CALIBRATION", case_total=0)
+
+    run_id = repository.create_run("core", "v1", "hash", {}, "CALIBRATION", case_total=1)
+    repository.approve_baseline(run_id, approved_by="tester")
+
+    with pytest.raises(ValueError, match="immutable"):
+        repository.approve_baseline(run_id, approved_by="other")
+    assert repository.get_current_baseline("core") == run_id
+
+
+def test_repository_invalidates_orphaned_active_run_on_initialize(tmp_path: Path):
+    repository = EvaluationRepository(tmp_path / "eval.db")
+    repository.initialize()
+    with repository._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO evaluation_runs (
+                id, status, started_at, finished_at, case_total, case_passed, pass_rate,
+                p0_total, p0_passed, avg_latency_ms, p95_latency_ms, gate_passed,
+                gate_reasons_json, config_json
+            ) VALUES ('orphaned', 'running', 'start', 'finish', 1, 0, 0, 0, 0, 0, 0, 0, '[]', '{}')
+            """
+        )
+
+    repository.initialize()
+
+    with repository._connect() as connection:
+        row = connection.execute("SELECT status, error FROM evaluation_runs WHERE id = 'orphaned'").fetchone()
+    assert (row["status"], row["error"]) == ("INVALID", "process_interrupted")
