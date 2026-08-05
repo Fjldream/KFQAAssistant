@@ -73,11 +73,32 @@ export interface FaithfulnessClaim {
   evidence: string;
 }
 
+export interface EvaluationSource {
+  title?: string;
+  source_path?: string;
+  snippet?: string;
+  score?: number | null;
+  images?: string[];
+}
+
 export interface TurnResult {
   question: string;
   answer: string;
   standalone_question?: string | null;
   passed: boolean;
+  keyword_passed?: boolean;
+  source_passed?: boolean;
+  image_passed?: boolean;
+  no_answer_passed?: boolean;
+  matched_keywords?: string[];
+  missing_keywords?: string[];
+  matched_source_keywords?: string[];
+  missing_source_keywords?: string[];
+  forbidden_source_matches?: string[];
+  sources?: EvaluationSource[];
+  image_count?: number;
+  source_count?: number;
+  elapsed_ms?: number;
   faithfulness_score: number | null;
   faithfulness_claims: FaithfulnessClaim[];
   metric_results: MetricResult[];
