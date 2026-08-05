@@ -4,6 +4,7 @@ import sqlite3
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from uuid import uuid4
 
 from app.evaluation.models import (
@@ -21,6 +22,8 @@ from app.evaluation.metrics import summarize_case_results
 
 
 class EvaluationRepository:
+    _initialize_lock = Lock()
+
     # 保存评测数据库路径，SQLite 文件不存在时会在初始化或保存时创建。
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
@@ -36,7 +39,7 @@ class EvaluationRepository:
 
     # 初始化评测平台需要的三张表。
     def initialize(self) -> None:
-        with self._connect() as connection:
+        with self._initialize_lock, self._connect() as connection:
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS evaluation_runs (

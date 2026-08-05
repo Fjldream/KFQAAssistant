@@ -240,6 +240,45 @@ def test_evaluate_no_answer_case_requires_refusal_without_sources():
     assert result.turn_results[0].source_count == 0
 
 
+def test_evaluate_no_answer_case_keeps_skipped_semantic_metrics_non_blocking():
+    chain = FakeChain(
+        [
+            ChatResponse(
+                answer="手册中没有找到相关说明。",
+                sources=[],
+                standalone_question="手册里有没有微信登录说明？",
+            )
+        ]
+    )
+    case = EvaluationCase(
+        id="single.wechat.no_answer",
+        category="边界问题",
+        priority="P0",
+        turns=[
+            EvaluationTurn(
+                question="手册里有没有微信登录说明？",
+                expected_keywords=["手册中没有找到相关说明"],
+                expect_no_answer=True,
+            )
+        ],
+    )
+
+    result = evaluate_case(
+        chain,
+        case,
+        judge=object(),
+        semantic_enabled=True,
+        metrics=("required_fact_coverage", "answer_correctness", "faithfulness"),
+    )
+
+    required_fact_coverage = next(
+        metric for metric in result.turn_results[0].metric_results
+        if metric.name == "required_fact_coverage"
+    )
+    assert result.passed is True
+    assert required_fact_coverage.status == MetricStatus.SKIPPED
+
+
 # 验证连续对话第二轮会携带摘要、最近消息和对话轮次。
 def test_evaluate_dialogue_case_passes_conversation_context_to_next_turn():
     chain = FakeChain(

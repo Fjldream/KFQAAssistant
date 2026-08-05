@@ -235,7 +235,7 @@ def evaluate_case(
 
 
 def _apply_priority_threshold(metric: MetricResult, priority: str) -> MetricResult:
-    if metric.name == "required_fact_coverage" and priority == "P0":
+    if metric.name == "required_fact_coverage" and priority == "P0" and metric.score is not None:
         return replace(metric, threshold=1.0, status=MetricStatus.PASSED if metric.score == 1.0 else MetricStatus.FAILED)
     if metric.name == "faithfulness" and metric.status == MetricStatus.PASSED and metric.score is not None and metric.score < 0.9:
         return replace(metric, status=MetricStatus.FAILED, threshold=0.9)
