@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from time import perf_counter
 
-from app.evaluation.judge import JudgementError, JudgeProtocol
+from app.evaluation.judge import JudgementCompletion, JudgementError, JudgeProtocol
 from app.rag.generation.answer_policy import is_no_answer
 
 
@@ -37,17 +37,19 @@ class FaithfulnessResult:
 
 
 def split_claims(judge: JudgeProtocol, answer: str) -> list[str]:
-    data = judge.complete_json(SPLIT_SYSTEM_PROMPT, f"回答：\n{answer}")
+    completion = judge.complete_json(SPLIT_SYSTEM_PROMPT, f"回答：\n{answer}")
+    data = completion.data if isinstance(completion, JudgementCompletion) else completion
     claims = data.get("claims", [])
     return [str(claim).strip() for claim in claims if str(claim).strip()]
 
 
 def judge_claim_support(judge: JudgeProtocol, claim: str, contexts: list[str]) -> ClaimJudgement:
     context_text = "\n\n---\n\n".join(contexts)
-    data = judge.complete_json(
+    completion = judge.complete_json(
         SUPPORT_SYSTEM_PROMPT,
         f"声明：{claim}\n\n手册片段：\n{context_text}",
     )
+    data = completion.data if isinstance(completion, JudgementCompletion) else completion
     raw = data.get("supported", False)
     if isinstance(raw, bool):
         supported = raw

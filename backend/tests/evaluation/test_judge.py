@@ -1,6 +1,6 @@
 import httpx
 import pytest
-from app.evaluation.judge import JudgementClient, JudgementError, create_judgement_client
+from app.evaluation.judge import JudgementClient, JudgementCompletion, JudgementError, create_judgement_client
 from app.core.config import Settings
 
 
@@ -38,15 +38,25 @@ class FakeClient:
 
 
 def test_complete_json_parses_llm_content(monkeypatch):
-    fake = FakeClient([FakeResponse({"choices": [{"message": {"content": '{"claims": ["a", "b"]}'}}]})])
+    fake = FakeClient([
+        FakeResponse({
+            "choices": [{"message": {"content": '{"claims": ["a", "b"]}'}}],
+            "usage": {"prompt_tokens": 11, "completion_tokens": 5, "prompt_cache_hit_tokens": 3},
+        })
+    ])
     monkeypatch.setattr(httpx, "Client", lambda *a, **k: fake)
-    judge = JudgementClient(api_key="k", base_url="https://api.deepseek.com", model="deepseek-v4-pro")
+    judge = JudgementClient(api_key="k", base_url="https://api.deepseek.com", model="deepseek-v4-flash")
     result = judge.complete_json(system_prompt="sys", user_prompt="user")
-    assert result == {"claims": ["a", "b"]}
-    assert fake.calls[0]["json"]["model"] == "deepseek-v4-pro"
+    assert isinstance(result, JudgementCompletion)
+    assert result.data == {"claims": ["a", "b"]}
+    assert result.usage is not None
+    assert result.usage.prompt_tokens == 11
+    assert fake.calls[0]["json"]["model"] == "deepseek-v4-flash"
     assert fake.calls[0]["headers"]["Authorization"] == "Bearer k"
     assert fake.calls[0]["url"].endswith("/chat/completions")
     assert fake.calls[0]["json"]["temperature"] == 0.0
+    assert fake.calls[0]["json"]["thinking"] == {"type": "disabled"}
+    assert fake.calls[0]["json"]["response_format"] == {"type": "json_object"}
 
 
 def test_complete_json_raises_on_http_error(monkeypatch):
@@ -66,6 +76,6 @@ def test_complete_json_raises_on_bad_json(monkeypatch):
 
 
 def test_create_judgement_client_uses_judge_model(monkeypatch):
-    settings = Settings(deepseek_api_key="k", deepseek_judge_model="deepseek-v4-pro")
+    settings = Settings(deepseek_api_key="k", deepseek_judge_model="deepseek-v4-flash")
     client = create_judgement_client(settings)
-    assert client.model == "deepseek-v4-pro"
+    assert client.model == "deepseek-v4-flash"

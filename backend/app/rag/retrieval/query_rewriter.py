@@ -4,6 +4,7 @@ from typing import Protocol
 
 import httpx
 
+from app.observability.model_usage import DEEPSEEK_FLASH_MODEL, record_model_usage
 
 REWRITE_SYSTEM_PROMPT = """你是 KingIAsk 的 RAG 检索查询改写器。
 你的任务是把用户问题改写为 3 到 5 条适合产品手册检索的短查询。
@@ -113,7 +114,7 @@ class DeepSeekQueryRewriter:
     ) -> None:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
-        self.model = model
+        self.model = DEEPSEEK_FLASH_MODEL
         self.timeout_seconds = timeout_seconds
         self.max_queries = max_queries
         self.fallback = StaticQueryRewriter(max_queries=max_queries)
@@ -125,7 +126,7 @@ class DeepSeekQueryRewriter:
             return self.fallback.rewrite(question)
 
         payload = {
-            "model": self.model,
+            "model": DEEPSEEK_FLASH_MODEL,
             "messages": [
                 {"role": "system", "content": REWRITE_SYSTEM_PROMPT},
                 {
@@ -138,6 +139,8 @@ class DeepSeekQueryRewriter:
                 },
             ],
             "temperature": 0.0,
+            "max_tokens": 400,
+            "thinking": {"type": "disabled"},
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
         try:
@@ -145,6 +148,7 @@ class DeepSeekQueryRewriter:
                 response = client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
                 response.raise_for_status()
                 data = response.json()
+            record_model_usage("query_rewrite", DEEPSEEK_FLASH_MODEL, data.get("usage"))
             content = data["choices"][0]["message"]["content"].strip()
             parsed = json.loads(content)
             queries = [str(query) for query in parsed.get("queries", []) if str(query).strip()]

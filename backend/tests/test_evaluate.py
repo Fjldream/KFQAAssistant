@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 import scripts.evaluate as evaluate_module
-from app.evaluation.judge import JudgementError
+from app.evaluation.judge import JudgementCompletion, JudgementError
 from app.schemas.chat import ChatResponse, SourceSnippet
 from scripts.evaluate import eval_result_to_dict, evaluate_question, load_eval_questions, main, summarize_results
 
@@ -276,8 +276,8 @@ def test_evaluate_question_records_faithfulness(monkeypatch):
     class FakeJudge:
         def complete_json(self, system_prompt, user_prompt):
             if "拆" in system_prompt:
-                return {"claims": ["按钮可配置颜色。"]}
-            return {"supported": True, "evidence": "按钮可配置颜色。"}
+                return JudgementCompletion({"claims": ["按钮可配置颜色。"]})
+            return JudgementCompletion({"supported": True, "evidence": "按钮可配置颜色。"})
 
     result = evaluate_question(FakeChain(), "问题", [], [], False, False, judge=FakeJudge(), semantic_enabled=True)
     assert result.faithfulness_score == 1.0

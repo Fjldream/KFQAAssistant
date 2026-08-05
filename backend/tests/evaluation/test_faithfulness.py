@@ -5,7 +5,7 @@ from app.evaluation.faithfulness import (
     judge_claim_support,
     split_claims,
 )
-from app.evaluation.judge import JudgementError
+from app.evaluation.judge import JudgementCompletion, JudgementError
 
 
 class FakeJudge:
@@ -18,8 +18,8 @@ class FakeJudge:
         if self.responses.get("raise"):
             raise JudgementError()
         if "拆分" in user_prompt or "声明" in system_prompt and "拆" in system_prompt:
-            return self.responses.get("split", {"claims": []})
-        return self.responses["support"].pop(0)
+            return JudgementCompletion(self.responses.get("split", {"claims": []}))
+        return JudgementCompletion(self.responses["support"].pop(0))
 
 
 def test_split_claims_returns_claim_list():

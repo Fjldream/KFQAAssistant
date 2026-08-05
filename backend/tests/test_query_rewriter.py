@@ -73,6 +73,9 @@ def test_deepseek_query_rewriter_parses_json_response(monkeypatch):
     result = rewriter.rewrite("如何创建采集工程，如何运行它呢？")
 
     assert captured["trust_env"] is False
+    assert captured["payload"]["model"] == "deepseek-v4-flash"
+    assert captured["payload"]["thinking"] == {"type": "disabled"}
+    assert captured["payload"]["max_tokens"] == 400
     assert result.used_llm is True
     assert result.queries[0] == "如何创建采集工程，如何运行它呢？"
     assert "如何部署启动采集工程？" in result.queries

@@ -35,6 +35,9 @@ def test_deepseek_client_does_not_use_system_proxy(monkeypatch):
 
     assert client.generate("问题", ["片段"]) == "回答"
     assert captured["trust_env"] is False
+    assert captured["payload"]["model"] == "deepseek-v4-flash"
+    assert captured["payload"]["thinking"] == {"type": "disabled"}
+    assert captured["payload"]["max_tokens"] == 1200
     user_prompt = captured["payload"]["messages"][1]["content"]
     assert "回答要求" in user_prompt
     assert "关键步骤或结论后标注资料编号" in user_prompt

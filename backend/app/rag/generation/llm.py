@@ -3,6 +3,7 @@ from collections.abc import Iterator
 
 import httpx
 
+from app.observability.model_usage import DEEPSEEK_FLASH_MODEL, record_model_usage
 from app.rag.errors import LLMGenerationError
 
 
@@ -26,19 +27,21 @@ class DeepSeekClient:
     def __init__(self, api_key: str, base_url: str, model: str, timeout_seconds: int = 60) -> None:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
-        self.model = model
+        self.model = DEEPSEEK_FLASH_MODEL
         self.timeout_seconds = timeout_seconds
 
     # 根据用户问题和检索片段构造严格 prompt，并调用 DeepSeek chat completions 接口。
     def generate(self, question: str, contexts: list[str]) -> str:
         context_text = "\n\n---\n\n".join(contexts)
         payload = {
-            "model": self.model,
+            "model": DEEPSEEK_FLASH_MODEL,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"问题：{question}\n\n{ANSWER_REQUIREMENTS}\n\n手册片段：\n{context_text}"},
             ],
             "temperature": 0.2,
+            "max_tokens": 1200,
+            "thinking": {"type": "disabled"},
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
         try:
@@ -46,6 +49,7 @@ class DeepSeekClient:
                 response = client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
                 response.raise_for_status()
                 data = response.json()
+            record_model_usage("answer", DEEPSEEK_FLASH_MODEL, data.get("usage"))
             return data["choices"][0]["message"]["content"].strip()
         except (httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
             raise LLMGenerationError() from exc
@@ -54,12 +58,14 @@ class DeepSeekClient:
     def generate_stream(self, question: str, contexts: list[str]) -> Iterator[str]:
         context_text = "\n\n---\n\n".join(contexts)
         payload = {
-            "model": self.model,
+            "model": DEEPSEEK_FLASH_MODEL,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"问题：{question}\n\n{ANSWER_REQUIREMENTS}\n\n手册片段：\n{context_text}"},
             ],
             "temperature": 0.2,
+            "max_tokens": 1200,
+            "thinking": {"type": "disabled"},
             "stream": True,
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
@@ -79,7 +85,14 @@ class DeepSeekClient:
                             chunk = json.loads(data)
                         except json.JSONDecodeError:
                             continue
-                        delta = chunk["choices"][0].get("delta", {}).get("content")
+                        if not isinstance(chunk, dict):
+                            continue
+                        if "usage" in chunk:
+                            record_model_usage("answer_stream", DEEPSEEK_FLASH_MODEL, chunk["usage"])
+                        choices = chunk.get("choices", [])
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta", {}).get("content")
                         if delta:
                             yield delta
         except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
