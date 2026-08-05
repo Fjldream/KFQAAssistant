@@ -139,6 +139,67 @@ def test_service_create_run_uses_trusted_coordinator_not_client_case_results(tmp
     assert service.cancel_run("trusted-run") is True
 
 
+def test_trusted_service_default_metrics_complete_a_valid_run(tmp_path: Path, monkeypatch):
+    import app.evaluation.service as service_module
+
+    class Judge:
+        def complete_json(self, system_prompt, user_prompt):
+            if "correctness" in system_prompt:
+                return {
+                    "correctness": 1.0,
+                    "relevance": 1.0,
+                    "facts": [{"id": "fact-1", "covered": True}],
+                    "forbidden_fact_matches": [],
+                }
+            return {"claims": [{"claim": "点击新建工程", "supported": True, "evidence": "资料"}]}
+
+    cases_path = tmp_path / "cases.json"
+    dialogues_path = tmp_path / "dialogues.json"
+    cases_path.write_text(
+        json.dumps(
+            {
+                "id": "trusted-core",
+                "version": "v1",
+                "default_thresholds": {
+                    "answer_correctness": 0.8,
+                    "faithfulness": 0.8,
+                    "p1_required_fact_coverage": 0.8,
+                },
+                "cases": [{
+                    "id": "single.collect.create",
+                    "category": "数采管理",
+                    "priority": "P1",
+                    "question": "如何创建采集工程？",
+                    "required_facts": [{"id": "fact-1", "text": "点击新建工程"}],
+                }],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(service_module, "create_judgement_client", lambda settings: Judge())
+    service = EvaluationService(
+        repository=EvaluationRepository(tmp_path / "eval.db"),
+        chain_factory=FakeChain,
+        cases_path=cases_path,
+        dialogues_path=dialogues_path,
+        fail_under=0.8,
+        max_p95_ms=30000,
+        semantic_enabled=True,
+    )
+    try:
+        run_id = service.create_run("trusted-core", GateMode.CALIBRATION)
+        assert service.coordinator.wait_for_idle(timeout=2)
+
+        detail = service.get_run(run_id)
+
+        assert detail is not None
+        assert detail.summary.status == "completed"
+        assert detail.summary.missing_judge_metrics == []
+    finally:
+        service.shutdown()
+
+
 # 验证服务可以只运行一条用例，支持前端逐条展示进度。
 def test_service_runs_single_case_by_id(tmp_path: Path):
     cases_path = tmp_path / "cases.json"

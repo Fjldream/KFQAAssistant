@@ -86,12 +86,14 @@ class EvaluationRunner:
         judge_factory: Callable[[], object | None],
         metric_names: tuple[str, ...],
         price_rates: dict[str, str] | None = None,
+        max_p95_ms: float | None = 30_000.0,
     ) -> None:
         self.repository = repository
         self.chain_factory = chain_factory
         self.judge_factory = judge_factory
         self.metric_names = metric_names
         self.price_rates = price_rates or {}
+        self.max_p95_ms = max_p95_ms
 
     def run(self, run_id: str, suite: EvaluationSuite, mode: GateMode, cancel: Event) -> EvaluationRunDetail:
         if not suite.cases:
@@ -105,7 +107,7 @@ class EvaluationRunner:
 
         for spec in suite.cases:
             if cancel.is_set():
-                return self._cancel(run_id, case_results)
+                return self._cancel(run_id, case_results, all_events)
             case = _legacy_case(spec)
             try:
                 with capture_model_usage() as collector:
@@ -118,7 +120,7 @@ class EvaluationRunner:
             self.repository.save_case_result(run_id, result)
             case_results.append(result)
             if cancel.is_set():
-                return self._cancel(run_id, case_results)
+                return self._cancel(run_id, case_results, all_events)
 
         summary = replace(summarize_case_results(case_results), run_id=run_id)
         self.repository.transition_run(run_id, RunStatus.SCORING)
@@ -129,6 +131,7 @@ class EvaluationRunner:
             min_avg_correctness_score=suite.default_thresholds.answer_correctness,
             min_avg_fact_coverage_score=suite.default_thresholds.p1_required_fact_coverage,
             min_avg_faithfulness_score=suite.default_thresholds.faithfulness,
+            max_p95_latency_ms=self.max_p95_ms,
         )
         absolute = evaluate_absolute_gate(summary, thresholds)
         reasons = [*validity.validity_reasons, *absolute.absolute_reasons]
@@ -149,16 +152,23 @@ class EvaluationRunner:
             passed=decision.outcome == GateOutcome.PASSED and validity.outcome != GateOutcome.INVALID,
             reasons=reasons,
         )
-        if validity.outcome == GateOutcome.INVALID or decision.outcome == GateOutcome.INVALID:
-            self.repository.invalidate_run(run_id, "evaluation_invalid")
-            return EvaluationRunDetail(replace(summary, status=RunStatus.INVALID), gate, case_results)
-
         token_totals = {
             "cache_hit": sum(event.cache_hit_tokens for event in all_events),
             "cache_miss": sum(max(0, event.prompt_tokens - event.cache_hit_tokens) for event in all_events),
             "output": sum(event.completion_tokens for event in all_events),
         }
         cost = estimate_deepseek_cost(all_events, self.price_rates)
+        if validity.outcome == GateOutcome.INVALID or decision.outcome == GateOutcome.INVALID:
+            self.repository.invalidate_run(
+                run_id,
+                "evaluation_invalid",
+                summary,
+                gate,
+                token_totals=token_totals,
+                estimated_cost=str(cost),
+            )
+            return EvaluationRunDetail(replace(summary, status=RunStatus.INVALID), gate, case_results)
+
         self.repository.finish_run(
             run_id,
             replace(summary, status=RunStatus.COMPLETED),
@@ -175,7 +185,23 @@ class EvaluationRunner:
         }
         return replace(result, metric_results=[*result.metric_results, MetricResult("model_usage", None, MetricStatus.SKIPPED, token_usage=payload)])
 
-    def _cancel(self, run_id: str, case_results: list[CaseResult]) -> EvaluationRunDetail:
-        self.repository.transition_run(run_id, RunStatus.CANCELLED)
+    def _cancel(
+        self,
+        run_id: str,
+        case_results: list[CaseResult],
+        events: list[ModelUsageEvent],
+    ) -> EvaluationRunDetail:
         summary = replace(summarize_case_results(case_results), run_id=run_id, status=RunStatus.CANCELLED)
-        return EvaluationRunDetail(summary, GateResult(False, ["evaluation cancelled"]), case_results)
+        gate = GateResult(False, ["evaluation cancelled"])
+        self.repository.cancel_run(
+            run_id,
+            summary,
+            gate,
+            token_totals={
+                "cache_hit": sum(event.cache_hit_tokens for event in events),
+                "cache_miss": sum(max(0, event.prompt_tokens - event.cache_hit_tokens) for event in events),
+                "output": sum(event.completion_tokens for event in events),
+            },
+            estimated_cost=str(estimate_deepseek_cost(events, self.price_rates)),
+        )
+        return EvaluationRunDetail(summary, gate, case_results)

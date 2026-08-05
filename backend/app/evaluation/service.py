@@ -37,7 +37,7 @@ class EvaluationService:
         fail_under: float,
         max_p95_ms: float | None,
         semantic_enabled: bool = False,
-        evaluation_metrics: str = "faithfulness",
+        evaluation_metrics: str = "answer_correctness,required_fact_coverage,faithfulness",
         coordinator: EvaluationCoordinator | None = None,
     ) -> None:
         self.repository = repository
@@ -53,7 +53,13 @@ class EvaluationService:
         for name in self.metrics:
             get_metric(name)
         self.coordinator = coordinator or EvaluationCoordinator(
-            runner=EvaluationRunner(repository, chain_factory, self._judge_or_none, self.metrics),
+            runner=EvaluationRunner(
+                repository,
+                chain_factory,
+                self._judge_or_none,
+                self.metrics,
+                max_p95_ms=max_p95_ms,
+            ),
             load_suite=self._load_suite,
             create_run=self._create_trusted_run,
             request_cancel=repository.request_cancel,

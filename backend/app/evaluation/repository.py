@@ -344,7 +344,47 @@ class EvaluationRepository:
     ) -> None:
         self._finish_run(run_id, RunStatus.COMPLETED, summary, gate_result, metric_summary, token_totals, estimated_cost)
 
-    def invalidate_run(self, run_id: str, error_code: str) -> None:
+    def cancel_run(
+        self,
+        run_id: str,
+        summary: EvaluationRunSummary,
+        gate_result: GateResult,
+        token_totals: dict[str, int] | None = None,
+        estimated_cost: str = "0.0000",
+    ) -> None:
+        self._finish_run(
+            run_id,
+            RunStatus.CANCELLED,
+            summary,
+            gate_result,
+            None,
+            token_totals,
+            estimated_cost,
+            "evaluation_cancelled",
+        )
+
+    def invalidate_run(
+        self,
+        run_id: str,
+        error_code: str,
+        summary: EvaluationRunSummary | None = None,
+        gate_result: GateResult | None = None,
+        metric_summary: dict | None = None,
+        token_totals: dict[str, int] | None = None,
+        estimated_cost: str = "0.0000",
+    ) -> None:
+        if summary is not None and gate_result is not None:
+            self._finish_run(
+                run_id,
+                RunStatus.INVALID,
+                summary,
+                gate_result,
+                metric_summary,
+                token_totals,
+                estimated_cost,
+                error_code,
+            )
+            return
         self.initialize()
         with self._connect() as connection:
             row = connection.execute("SELECT status FROM evaluation_runs WHERE id = ?", (run_id,)).fetchone()
@@ -404,6 +444,7 @@ class EvaluationRepository:
         metric_summary: dict | None,
         token_totals: dict[str, int] | None,
         estimated_cost: str,
+        error_code: str | None = None,
     ) -> None:
         self.initialize()
         tokens = token_totals or {}
@@ -418,13 +459,13 @@ class EvaluationRepository:
                     case_total = ?, case_passed = ?, pass_rate = ?, p0_total = ?, p0_passed = ?,
                     avg_latency_ms = ?, p95_latency_ms = ?, gate_passed = ?, gate_reasons_json = ?,
                     metric_summary_json = ?, input_cache_hit_tokens = ?, input_cache_miss_tokens = ?,
-                    output_tokens = ?, estimated_cost = ? WHERE id = ?
+                    output_tokens = ?, estimated_cost = ?, error = ? WHERE id = ?
                 """,
                 (status.value, now, now, now, summary.case_total, summary.case_passed, summary.pass_rate,
                  summary.p0_total, summary.p0_passed, summary.avg_latency_ms, summary.p95_latency_ms,
                  int(gate_result.passed), self._json(gate_result.reasons), self._json(metric_summary or {}),
                  int(tokens.get("cache_hit", 0)), int(tokens.get("cache_miss", 0)), int(tokens.get("output", 0)),
-                 estimated_cost, run_id),
+                 estimated_cost, error_code, run_id),
             )
 
     # 计算一组用例行的单轮/多轮数量和分类通过率，用于恢复运行摘要中的明细指标。
@@ -665,6 +706,12 @@ class EvaluationRepository:
             knowledge_base_id=row["knowledge_base_id"],
             completed_count=int(row["completed_case_count"] or 0),
             error_count=int(row["error_count"] or 0),
+            total_token_count=(
+                int(row["input_cache_hit_tokens"] or 0)
+                + int(row["input_cache_miss_tokens"] or 0)
+                + int(row["output_tokens"] or 0)
+            ),
+            estimated_cost=float(row["estimated_cost"] or 0),
         )
 
     # 从数据库读取一个用例结果，并附带其所有轮次结果。

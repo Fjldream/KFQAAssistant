@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     deepseek_judge_model: str = "deepseek-v4-flash"
     deepseek_judge_timeout_seconds: int = 60
     evaluation_semantic_enabled: bool = True
-    evaluation_metrics: str = "faithfulness"
+    evaluation_metrics: str = "answer_correctness,required_fact_coverage,faithfulness"
 
     embedding_model_name: str = "BAAI/bge-small-zh-v1.5"
     chroma_persist_dir: Path = Path("storage/chroma")

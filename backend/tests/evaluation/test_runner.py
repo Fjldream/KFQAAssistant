@@ -130,6 +130,11 @@ def test_runner_marks_invalid_when_judge_errors(valid_dependencies: Dependencies
 
     assert detail.summary.status == RunStatus.INVALID
     assert detail.gate_result.reasons
+    persisted = valid_dependencies.repository.get_run(run_id)
+    assert persisted is not None
+    assert persisted.summary.status == RunStatus.INVALID
+    assert persisted.gate_result.reasons == detail.gate_result.reasons
+    assert persisted.summary.total_token_count == 14
 
 
 def test_runner_stops_after_checkpoint_when_cancelled(tmp_path: Path):
@@ -149,7 +154,11 @@ def test_runner_stops_after_checkpoint_when_cancelled(tmp_path: Path):
     detail = runner.run(run_id, suite, GateMode.CALIBRATION, cancel)
 
     assert detail.summary.status == RunStatus.CANCELLED
-    assert repository.get_run(run_id).summary.completed_case_count == 1
+    persisted = repository.get_run(run_id)
+    assert persisted is not None
+    assert persisted.summary.completed_case_count == 1
+    assert persisted.summary.status == RunStatus.CANCELLED
+    assert persisted.gate_result.reasons == ["evaluation cancelled"]
 
 
 def test_runner_checkpoints_rag_failure_and_continues_remaining_cases(tmp_path: Path):
@@ -210,3 +219,21 @@ def test_runner_uses_a_valid_approved_baseline(valid_dependencies: Dependencies)
 
     assert detail.summary.status == RunStatus.COMPLETED
     assert not any(reason.startswith("批准基准无效") for reason in detail.gate_result.reasons)
+
+
+def test_runner_uses_configured_p95_threshold(valid_dependencies: Dependencies):
+    suite = core_suite()
+    runner = valid_dependencies.runner.__class__(
+        repository=valid_dependencies.repository,
+        chain_factory=FakeChain,
+        judge_factory=lambda: valid_dependencies.judge,
+        metric_names=("answer_correctness", "required_fact_coverage", "faithfulness"),
+        max_p95_ms=0,
+    )
+    run_id = create_run(valid_dependencies.repository, suite)
+
+    detail = runner.run(run_id, suite, GateMode.BLOCKING, Event())
+
+    assert detail.summary.status == RunStatus.COMPLETED
+    assert detail.gate_result.passed is False
+    assert any(reason.startswith("P95") for reason in detail.gate_result.reasons)
