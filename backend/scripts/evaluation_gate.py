@@ -116,12 +116,16 @@ def _print_detail(detail: EvaluationRunDetail, suite: EvaluationSuite, baseline_
     print(f"Report: {output}")
 
 
-def _exit_code(mode: GateMode, detail: EvaluationRunDetail) -> int:
+def _exit_code(mode: GateMode, detail: EvaluationRunDetail, absolute, regression) -> int:
     if _status_value(detail.summary.status).lower() != RunStatus.COMPLETED.value:
+        return 2
+    if absolute.outcome.value == "INVALID" or (regression is not None and regression.outcome.value == "INVALID"):
         return 2
     if mode == GateMode.CALIBRATION:
         return 0
-    return 0 if detail.gate_result.passed else 1
+    if absolute.outcome.value == "FAILED" or (regression is not None and regression.outcome.value == "FAILED"):
+        return 1
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -176,11 +180,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         _write_report(args.output, report)
         _print_detail(detail, dependencies.suite, baseline_run_id, args.output, absolute, regression)
         if args.approve_baseline:
-            if _exit_code(mode, detail) != 0 or not detail.gate_result.passed:
+            if _exit_code(mode, detail, absolute, regression) != 0:
                 print("only a valid passing calibration run can be approved", file=sys.stderr)
                 return 2
             dependencies.repository.approve_baseline(detail.summary.run_id, args.approved_by.strip())
-        return _exit_code(mode, detail)
+        return _exit_code(mode, detail, absolute, regression)
     except Exception as exc:
         print(f"evaluation gate failed: {type(exc).__name__}", file=sys.stderr)
         return 2

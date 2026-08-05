@@ -38,16 +38,20 @@ class FakeRepository:
         self.approvals.append((run_id, approved_by))
 
     def get_run(self, run_id: str) -> EvaluationRunDetail:
-        return _detail(status="completed", gate_passed=True)
+        return _valid_gate_detail(gate_passed=True)
 
 
 class FakeRunner:
     def __init__(self) -> None:
-        self.detail = _detail()
+        self.detail = _valid_gate_detail(gate_passed=True)
         self.calls: list[tuple] = []
 
     def result(self, *, status: str, gate_passed: bool) -> None:
-        self.detail = _detail(status=status, gate_passed=gate_passed)
+        self.detail = (
+            _valid_gate_detail(gate_passed=gate_passed)
+            if str(getattr(status, "value", status)).lower() == "completed"
+            else _detail(status=status, gate_passed=gate_passed)
+        )
 
     def run(self, *args):
         self.calls.append(args)
@@ -92,6 +96,50 @@ def _detail(status: str = "completed", gate_passed: bool = True) -> EvaluationRu
     )
 
 
+def _valid_quality_failure_detail(gate_passed: bool) -> EvaluationRunDetail:
+    detail = _detail(gate_passed=gate_passed)
+    return EvaluationRunDetail(
+        summary=EvaluationRunSummary(
+            run_id=detail.summary.run_id,
+            status="completed",
+            case_total=1,
+            case_passed=0,
+            pass_rate=0.0,
+            p0_total=1,
+            p0_passed=1,
+            completed_count=1,
+            judge_coverage=1.0,
+            avg_correctness_score=1.0,
+            avg_fact_coverage_score=1.0,
+            avg_faithfulness_score=1.0,
+        ),
+        gate_result=detail.gate_result,
+        case_results=detail.case_results,
+    )
+
+
+def _valid_gate_detail(gate_passed: bool) -> EvaluationRunDetail:
+    detail = _detail(gate_passed=gate_passed)
+    return EvaluationRunDetail(
+        summary=EvaluationRunSummary(
+            run_id=detail.summary.run_id,
+            status="completed",
+            case_total=1,
+            case_passed=1 if gate_passed else 0,
+            pass_rate=1.0 if gate_passed else 0.0,
+            p0_total=1,
+            p0_passed=1 if gate_passed else 0,
+            completed_count=1,
+            judge_coverage=1.0,
+            avg_correctness_score=1.0,
+            avg_fact_coverage_score=1.0,
+            avg_faithfulness_score=1.0,
+        ),
+        gate_result=detail.gate_result,
+        case_results=detail.case_results,
+    )
+
+
 @pytest.fixture
 def fake_runner(monkeypatch):
     repository = FakeRepository()
@@ -119,6 +167,12 @@ def test_gate_accepts_completed_runner_status_enum(fake_runner):
     fake_runner.result(status=RunStatus.COMPLETED, gate_passed=True)
 
     assert gate_module.main(["--suite", "core", "--mode", "blocking"]) == 0
+
+
+def test_blocking_exit_uses_failed_calculated_absolute_gate(fake_runner):
+    fake_runner.detail = _valid_quality_failure_detail(gate_passed=True)
+
+    assert gate_module.main(["--suite", "core", "--mode", "blocking"]) == 1
 
 
 def test_gate_writes_redacted_json_report_and_prints_run_summary(tmp_path: Path, fake_runner, capsys):
