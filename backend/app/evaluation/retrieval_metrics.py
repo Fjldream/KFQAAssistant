@@ -22,10 +22,16 @@ def evaluate_retrieval(turn, sources) -> list[MetricResult]:
             _result("recall_at_k", len(matched) / len(expected_sources), MetricStatus.PASSED if len(matched) == len(expected_sources) else MetricStatus.FAILED, 1.0, {"matched_source_ids": matched}),
             _result("mrr", 1.0 / first_rank if first_rank else 0.0, MetricStatus.PASSED if first_rank else MetricStatus.FAILED, 1.0),
         ])
+    else:
+        results.extend([_result(name, None, MetricStatus.SKIPPED) for name in ("hit_at_k", "recall_at_k", "mrr")])
     if expected_chunks:
         matched_chunks = [chunk_id for chunk_id in expected_chunks if chunk_id in actual_chunks]
         results.append(_result("chunk_hit_at_k", 1.0 if matched_chunks else 0.0, MetricStatus.PASSED if matched_chunks else MetricStatus.FAILED, 1.0, {"matched_chunk_ids": matched_chunks}))
+    else:
+        results.append(_result("chunk_hit_at_k", None, MetricStatus.SKIPPED))
     if forbidden_sources:
         matched_forbidden = [source_id for source_id in forbidden_sources if source_id in actual_sources]
         results.append(_result("forbidden_source_matches", 0.0 if matched_forbidden else 1.0, MetricStatus.FAILED if matched_forbidden else MetricStatus.PASSED, 1.0, {"matched_source_ids": matched_forbidden}))
+    else:
+        results.append(_result("forbidden_source_matches", None, MetricStatus.SKIPPED))
     return results

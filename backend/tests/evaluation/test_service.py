@@ -55,6 +55,7 @@ def test_service_lists_cases(tmp_path: Path):
         dialogues_path=dialogues_path,
         fail_under=0.8,
         max_p95_ms=30000,
+        evaluation_metrics="hit_at_k",
     )
 
     cases = service.list_cases()
@@ -93,6 +94,7 @@ def test_service_runs_evaluation_and_saves_detail(tmp_path: Path):
         dialogues_path=dialogues_path,
         fail_under=0.8,
         max_p95_ms=30000,
+        evaluation_metrics="hit_at_k",
     )
 
     detail = service.run_evaluation(include_dialogues=False)
@@ -116,6 +118,7 @@ def test_service_runs_single_case_by_id(tmp_path: Path):
         dialogues_path=dialogues_path,
         fail_under=0.8,
         max_p95_ms=30000,
+        evaluation_metrics="hit_at_k",
     )
 
     result = service.run_case("single.collect.create", include_dialogues=False)
@@ -177,6 +180,7 @@ def test_service_returns_overview_with_latest_run_and_comparison(tmp_path: Path)
         dialogues_path=dialogues_path,
         fail_under=0.8,
         max_p95_ms=30000,
+        evaluation_metrics="hit_at_k",
     )
     first = service.run_evaluation(include_dialogues=False)
     second = service.run_evaluation(include_dialogues=False)
@@ -247,3 +251,4 @@ def test_service_run_case_skips_judge_by_default(tmp_path, monkeypatch):
 
     assert result is not None
     assert result.turn_results[0].faithfulness_score is None
+    assert result.turn_results[0].metric_results[0].error_code == "judge_unavailable"

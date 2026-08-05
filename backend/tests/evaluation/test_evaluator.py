@@ -162,6 +162,32 @@ def test_evaluate_case_applies_every_configured_metric_and_p0_fact_threshold():
     assert result.passed is False
 
 
+def test_evaluate_case_keeps_non_hard_metric_failure_outside_case_gate():
+    class Judge:
+        def complete_json(self, system_prompt, user_prompt):
+            if "correctness" in system_prompt:
+                return {
+                    "correctness": 1.0,
+                    "relevance": 0.0,
+                    "facts": [{"id": "entry", "covered": True}],
+                    "forbidden_fact_matches": [],
+                }
+            return {"claims": [{"claim": "工程需要名称", "supported": True, "evidence": "填写名称"}]}
+
+    chain = FakeChain([ChatResponse(answer="进入数采管理创建工程。", sources=[])])
+    case = EvaluationCase(
+        id="relevance-observability",
+        category="测试",
+        turns=[EvaluationTurn(question="如何创建工程？", required_facts=[{"id": "entry", "text": "进入数采管理"}])],
+    )
+
+    result = evaluate_case(chain, case, judge=Judge(), metrics=("answer_correctness", "answer_relevance", "required_fact_coverage"))
+
+    relevance = next(metric for metric in result.turn_results[0].metric_results if metric.name == "answer_relevance")
+    assert relevance.status == MetricStatus.FAILED
+    assert result.passed is True
+
+
 # 验证不应回答的问题必须拒答，并且不能返回资料来源。
 def test_evaluate_no_answer_case_requires_refusal_without_sources():
     chain = FakeChain(

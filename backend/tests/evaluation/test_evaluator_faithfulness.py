@@ -1,6 +1,6 @@
 from app.evaluation.evaluator import evaluate_case
 from app.evaluation.metrics_registry import METRIC_REGISTRY
-from app.evaluation.models import EvaluationCase, EvaluationTurn
+from app.evaluation.models import EvaluationCase, EvaluationTurn, MetricStatus
 from app.schemas.chat import ChatResponse, SourceSnippet
 
 
@@ -52,14 +52,7 @@ def test_evaluate_case_disabled_leaves_faithfulness_none():
     assert turn.faithfulness_claims == []
 
 
-def test_evaluate_case_without_judge_skips_faithfulness(monkeypatch):
-    # 不传 judge 时不得隐式创建真实裁判或调用任何指标
-    import app.evaluation.evaluator as evaluator_module
-
-    def boom(*args, **kwargs):
-        raise AssertionError("未传 judge 时不应调用 get_metric")
-
-    monkeypatch.setattr(evaluator_module, "get_metric", boom)
+def test_evaluate_case_without_judge_marks_configured_judge_metric_error():
     chain = FakeChain(ChatResponse(
         answer="按钮可以配置颜色。",
         sources=[SourceSnippet(title="t", source_path="p.md", snippet="s", evidence_ids=["资料 1"], images=[], score=0.9)],
@@ -68,3 +61,6 @@ def test_evaluate_case_without_judge_skips_faithfulness(monkeypatch):
     turn = case_result.turn_results[0]
     assert turn.faithfulness_score is None
     assert turn.faithfulness_claims == []
+    assert turn.metric_results[0].status == MetricStatus.ERROR
+    assert turn.metric_results[0].error_code == "judge_unavailable"
+    assert case_result.passed is False

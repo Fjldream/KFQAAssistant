@@ -46,7 +46,8 @@ def evaluate_answer_quality(judge: JudgeProtocol, turn, answer: str) -> list[Met
         returned_facts = data["facts"]
         forbidden = data["forbidden_fact_matches"]
         if (not all(isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 1 for value in (correctness, relevance))
-                or not isinstance(returned_facts, list) or not isinstance(forbidden, list)):
+                or not isinstance(returned_facts, list) or not isinstance(forbidden, list)
+                or not all(isinstance(item, str) for item in forbidden)):
             raise ValueError
         expected_ids = [str(fact["id"]) for fact in fact_payload]
         fact_by_id = {item["id"]: item for item in returned_facts if isinstance(item, dict) and isinstance(item.get("covered"), bool)}

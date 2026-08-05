@@ -52,3 +52,10 @@ def test_retrieval_returns_error_when_identifiers_are_missing():
 
     assert metric_by_name(results, "hit_at_k").status == MetricStatus.ERROR
     assert metric_by_name(results, "hit_at_k").error_code == "missing_source_ids"
+
+
+def test_retrieval_returns_skipped_results_when_metric_is_not_applicable():
+    results = evaluate_retrieval(turn_spec(), sources("doc-a"))
+
+    assert {result.name for result in results} == {"hit_at_k", "recall_at_k", "mrr", "chunk_hit_at_k", "forbidden_source_matches"}
+    assert {result.status for result in results} == {MetricStatus.SKIPPED}

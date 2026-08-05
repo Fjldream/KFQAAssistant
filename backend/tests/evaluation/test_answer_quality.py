@@ -72,6 +72,19 @@ def test_answer_quality_returns_error_for_malformed_judge_output():
     assert {result.error_code for result in results} == {"judge_schema_error"}
 
 
+def test_answer_quality_rejects_non_string_forbidden_fact_matches():
+    judge = FakeJudge({
+        "correctness": 1.0,
+        "relevance": 1.0,
+        "facts": [{"id": "entry", "covered": True}, {"id": "name", "covered": True}],
+        "forbidden_fact_matches": [42],
+    })
+
+    results = evaluate_answer_quality(judge, turn_spec(), "答案")
+
+    assert {result.error_code for result in results} == {"judge_schema_error"}
+
+
 def test_answer_quality_returns_stable_http_error():
     results = evaluate_answer_quality(FakeJudge(JudgementError()), turn_spec(), "答案")
 

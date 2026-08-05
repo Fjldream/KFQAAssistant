@@ -11,6 +11,9 @@ from app.rag.generation.answer_policy import is_no_answer
 from app.schemas.chat import ChatHistoryMessage, ChatResponse
 
 
+RETRIEVAL_METRICS = {"hit_at_k", "recall_at_k", "mrr", "chunk_hit_at_k", "forbidden_source_matches"}
+
+
 class ChainProtocol(Protocol):
     # 执行一次 RAG 问答，评测器只依赖这个稳定接口，避免绑定具体 RagChain 实现。
     def answer(
@@ -149,7 +152,7 @@ def evaluate_case(
     case: EvaluationCase,
     judge: JudgeProtocol | None = None,
     semantic_enabled: bool = True,
-    metrics: tuple[str, ...] = ("faithfulness",),
+    metrics: tuple[str, ...] = (),
 ) -> CaseResult:
     conversation_summary = ""
     recent_messages: list[ChatHistoryMessage] = []
@@ -169,15 +172,19 @@ def evaluate_case(
         faithfulness_score = None
         faithfulness_claims: list[dict] = []
         faithfulness_elapsed_ms = 0.0
-        if judge is not None and semantic_enabled:
-            for metric_name in metrics:
-                get_metric(metric_name)
+        for metric_name in metrics:
+            get_metric(metric_name)
         requested = set(metrics)
-        if requested & {"hit_at_k", "recall_at_k", "mrr", "chunk_hit_at_k", "forbidden_source_matches"}:
+        if requested & RETRIEVAL_METRICS:
             metric_results.extend(result for result in evaluate_retrieval(turn, response.sources) if result.name in requested)
         if requested & {"answer_correctness", "answer_relevance", "required_fact_coverage", "forbidden_fact_matches"}:
             if judge is not None and semantic_enabled:
                 metric_results.extend(result for result in evaluate_answer_quality(judge, turn, response.answer) if result.name in requested)
+            else:
+                metric_results.extend(
+                    MetricResult(name, None, MetricStatus.ERROR, error_code="judge_unavailable")
+                    for name in requested & {"answer_correctness", "answer_relevance", "required_fact_coverage", "forbidden_fact_matches"}
+                )
         if "faithfulness" in requested:
             if judge is not None and semantic_enabled:
                 result = get_metric("faithfulness").evaluate(response.answer, [source.snippet for source in response.sources], judge)
@@ -185,6 +192,8 @@ def evaluate_case(
                 faithfulness_score = result.score
                 faithfulness_claims = result.details.get("claims", [])
                 faithfulness_elapsed_ms = result.elapsed_ms
+            else:
+                metric_results.append(MetricResult("faithfulness", None, MetricStatus.ERROR, error_code="judge_unavailable"))
         metric_results = [_apply_priority_threshold(metric, case.priority) for metric in metric_results]
         turn_result = _evaluate_turn(
             turn,
@@ -195,7 +204,7 @@ def evaluate_case(
             faithfulness_elapsed_ms,
             metric_results,
         )
-        if any(metric.status in (MetricStatus.FAILED, MetricStatus.ERROR) for metric in metric_results):
+        if any(_is_case_gate_failure(metric, case.priority) for metric in metric_results):
             turn_result = replace(turn_result, passed=False)
         turn_results.append(turn_result)
 
@@ -225,3 +234,19 @@ def _apply_priority_threshold(metric: MetricResult, priority: str) -> MetricResu
     if metric.name == "faithfulness" and metric.status == MetricStatus.PASSED and metric.score is not None and metric.score < 0.9:
         return replace(metric, status=MetricStatus.FAILED, threshold=0.9)
     return metric
+
+
+def _is_case_gate_failure(metric: MetricResult, priority: str) -> bool:
+    if metric.status == MetricStatus.ERROR:
+        return True
+    if metric.status != MetricStatus.FAILED:
+        return False
+    if metric.name == "hit_at_k":
+        return priority == "P0"
+    return metric.name in {
+        "answer_correctness",
+        "required_fact_coverage",
+        "faithfulness",
+        "forbidden_fact_matches",
+        "forbidden_source_matches",
+    }
