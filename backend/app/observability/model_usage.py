@@ -55,9 +55,10 @@ def record_model_usage(
     operation: str,
     model: str,
     usage: Mapping[str, object] | None = None,
-) -> ModelUsageEvent:
+) -> ModelUsageEvent | None:
     event = usage_event_from_response(operation, model, {"usage": usage or {}})
     collector = _collector.get()
-    if collector is not None:
-        collector.events.append(event)
+    if collector is None:
+        return None
+    collector.events.append(event)
     return event

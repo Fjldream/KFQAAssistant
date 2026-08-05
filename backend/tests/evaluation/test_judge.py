@@ -1,6 +1,7 @@
 import httpx
 import pytest
 from app.evaluation.judge import JudgementClient, JudgementCompletion, JudgementError, create_judgement_client
+from app.observability.model_usage import capture_model_usage
 from app.core.config import Settings
 
 
@@ -46,7 +47,8 @@ def test_complete_json_parses_llm_content(monkeypatch):
     ])
     monkeypatch.setattr(httpx, "Client", lambda *a, **k: fake)
     judge = JudgementClient(api_key="k", base_url="https://api.deepseek.com", model="deepseek-v4-flash")
-    result = judge.complete_json(system_prompt="sys", user_prompt="user")
+    with capture_model_usage():
+        result = judge.complete_json(system_prompt="sys", user_prompt="user")
     assert isinstance(result, JudgementCompletion)
     assert result.data == {"claims": ["a", "b"]}
     assert result.usage is not None
@@ -55,8 +57,24 @@ def test_complete_json_parses_llm_content(monkeypatch):
     assert fake.calls[0]["headers"]["Authorization"] == "Bearer k"
     assert fake.calls[0]["url"].endswith("/chat/completions")
     assert fake.calls[0]["json"]["temperature"] == 0.0
+    assert fake.calls[0]["json"]["max_tokens"] == 1600
     assert fake.calls[0]["json"]["thinking"] == {"type": "disabled"}
     assert fake.calls[0]["json"]["response_format"] == {"type": "json_object"}
+
+
+def test_complete_json_ignores_usage_outside_capture_context(monkeypatch):
+    fake = FakeClient([
+        FakeResponse({
+            "choices": [{"message": {"content": '{"claims": ["a"]}'}}],
+            "usage": {"prompt_tokens": 11, "completion_tokens": 5},
+        })
+    ])
+    monkeypatch.setattr(httpx, "Client", lambda *a, **k: fake)
+    judge = JudgementClient(api_key="k", base_url="https://api.deepseek.com", model="deepseek-v4-flash")
+
+    result = judge.complete_json(system_prompt="sys", user_prompt="user")
+
+    assert result.usage is None
 
 
 def test_complete_json_raises_on_http_error(monkeypatch):
