@@ -21,7 +21,7 @@ python -m scripts.evaluation_gate \
   --output ../storage/reports/core-calibration.json
 ```
 
-Calibration always executes the full Suite and writes the report. It returns `0` when execution is valid even if quality thresholds are not met; use it to collect comparable samples and investigate failures. It returns `2` for an invalid execution, such as incomplete Case completion, Judge errors or missing Judge metrics, incomplete Judge coverage, cancellation, or an unavailable/misconfigured dependency.
+After the Run is successfully created and finalized, calibration executes the full Suite and writes the report. It returns `0` when execution is valid even if quality thresholds are not met; use it to collect comparable samples and investigate failures. It returns `2` for an invalid execution, such as incomplete Case completion, Judge errors or missing Judge metrics, incomplete Judge coverage, cancellation, or an unavailable/misconfigured dependency. If startup or finalization fails before report creation, capture the Run ID, timestamp, and exception type in safe local diagnostic logging; never log prompts, API keys, or authorization headers.
 
 Run the same command three to five times with no code, index, or configuration changes. Review Case outcomes and semantic scores together. Do not approve a baseline when a Run is `INVALID`, when any P0 judgment is disputed, or when score variation crosses thresholds unpredictably. Record disputed Case IDs, correct the rubric or Judge prompt in a focused change, and rerun calibration before approval.
 

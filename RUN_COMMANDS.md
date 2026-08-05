@@ -54,7 +54,7 @@ DATA_DIR=data/help
 CHROMA_PERSIST_DIR=storage/chroma
 INDEX_MANIFEST_PATH=storage/processed/index_manifest.json
 EVALUATION_DB_PATH=storage/evaluation/kingiask_eval.db
-EVALUATION_CASES_PATH=backend/evaluation_cases/eval_questions.json
+EVALUATION_CASES_PATH=backend/evaluation_cases/core.v1.json
 EVALUATION_DIALOGUES_PATH=backend/evaluation_cases/eval_dialogues.json
 ```
 
