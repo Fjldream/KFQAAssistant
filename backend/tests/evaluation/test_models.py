@@ -2,8 +2,31 @@ from app.evaluation.models import (
     EvaluationCase,
     EvaluationRunSummary,
     EvaluationTurn,
+    RunStatus,
     TurnResult,
+    can_transition,
 )
+import pytest
+
+
+@pytest.mark.parametrize(("source", "target"), [
+    (RunStatus.CREATED, RunStatus.RUNNING),
+    (RunStatus.RUNNING, RunStatus.SCORING),
+    (RunStatus.SCORING, RunStatus.COMPLETED),
+    (RunStatus.RUNNING, RunStatus.INVALID),
+    (RunStatus.RUNNING, RunStatus.CANCELLED),
+])
+def test_allowed_run_transitions(source, target):
+    assert can_transition(source, target)
+
+
+def test_run_cannot_transition_from_terminal_state():
+    assert not can_transition(RunStatus.COMPLETED, RunStatus.RUNNING)
+
+
+def test_run_cannot_cancel_before_it_starts_or_while_scoring():
+    assert not can_transition(RunStatus.CREATED, RunStatus.CANCELLED)
+    assert not can_transition(RunStatus.SCORING, RunStatus.CANCELLED)
 
 
 # 验证单轮评测用例在没有显式填写字段时，会使用平台默认值。

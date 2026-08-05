@@ -88,3 +88,38 @@ def test_summarize_case_results_marks_judge_metric_error_invalid():
     summary = summarize_case_results([result])
 
     assert summary.status == "INVALID"
+
+
+def test_summarize_case_results_includes_gate_metrics_and_run_counts():
+    result = CaseResult(
+        case_id="metrics",
+        category="测试",
+        priority="P1",
+        case_type="single",
+        passed=True,
+        elapsed_ms=200.0,
+        turn_results=[TurnResult(
+            question="q", answer="a", standalone_question=None, passed=True,
+            keyword_passed=True, source_passed=True, image_passed=True, no_answer_passed=True,
+            metric_results=[
+                MetricResult("answer_correctness", 0.8, MetricStatus.PASSED),
+                MetricResult("required_fact_coverage", 0.9, MetricStatus.PASSED),
+                MetricResult("faithfulness", 1.0, MetricStatus.PASSED),
+                MetricResult("recall_at_k", 0.7, MetricStatus.FAILED),
+                MetricResult("mrr", 0.6, MetricStatus.FAILED),
+            ],
+        )],
+    )
+
+    summary = summarize_case_results([result])
+
+    assert summary.completed_count == 1
+    assert summary.error_count == 0
+    assert summary.judge_coverage == 1.0
+    assert summary.avg_correctness_score == 0.8
+    assert summary.avg_fact_coverage_score == 0.9
+    assert summary.avg_faithfulness_score == 1.0
+    assert summary.avg_retrieval_recall == 0.7
+    assert summary.avg_retrieval_mrr == 0.6
+    assert summary.single_p95_latency_ms == 200.0
+    assert summary.dialogue_p95_latency_ms == 0.0

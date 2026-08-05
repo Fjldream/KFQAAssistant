@@ -18,6 +18,25 @@ def _p95(values: list[float]) -> float:
     return ordered[index]
 
 
+def _average_metric(results: list[CaseResult], name: str) -> float | None:
+    scores = [
+        metric.score
+        for result in results
+        for turn in result.turn_results
+        for metric in turn.metric_results
+        if metric.name == name and metric.score is not None
+    ]
+    return mean(scores) if scores else None
+
+
+def _token_count(token_usage: object) -> int:
+    if token_usage is None:
+        return 0
+    if isinstance(token_usage, dict):
+        return int(token_usage.get("total_tokens", token_usage.get("total", 0)) or 0)
+    return int(getattr(token_usage, "total_tokens", getattr(token_usage, "total", 0)) or 0)
+
+
 # 按分类汇总通过率，用于评测中心展示哪个产品模块退化。
 def _category_pass_rates(results: list[CaseResult]) -> dict[str, float]:
     grouped: dict[str, list[CaseResult]] = {}
@@ -41,6 +60,8 @@ def summarize_case_results(results: list[CaseResult]) -> EvaluationRunSummary:
     single_results = [result for result in results if result.case_type == "single"]
     dialogue_results = [result for result in results if result.case_type == "dialogue"]
     latencies = [result.elapsed_ms for result in results]
+    single_latencies = [result.elapsed_ms for result in single_results]
+    dialogue_latencies = [result.elapsed_ms for result in dialogue_results]
     faithfulness_scores = [
         turn.faithfulness_score
         for result in results
@@ -53,6 +74,18 @@ def summarize_case_results(results: list[CaseResult]) -> EvaluationRunSummary:
         for turn in result.turn_results
         for metric in turn.metric_results
     )
+    metric_results = [
+        metric
+        for result in results
+        for turn in result.turn_results
+        for metric in turn.metric_results
+    ]
+    judge_metrics = [
+        metric for metric in metric_results
+        if metric.name in {"answer_correctness", "answer_relevance", "required_fact_coverage", "forbidden_fact_matches", "faithfulness"}
+        and metric.status != MetricStatus.SKIPPED
+    ]
+    judge_completed = sum(1 for metric in judge_metrics if metric.status in {MetricStatus.PASSED, MetricStatus.FAILED})
 
     return EvaluationRunSummary(
         run_id=f"eval-{uuid4().hex}",
@@ -69,5 +102,20 @@ def summarize_case_results(results: list[CaseResult]) -> EvaluationRunSummary:
         dialogue_total=len(dialogue_results),
         dialogue_passed=sum(1 for result in dialogue_results if result.passed),
         category_pass_rates=_category_pass_rates(results),
-        avg_faithfulness_score=mean(faithfulness_scores) if faithfulness_scores else None,
+        avg_faithfulness_score=(
+            mean(faithfulness_scores)
+            if faithfulness_scores
+            else _average_metric(results, "faithfulness")
+        ),
+        completed_count=case_total,
+        error_count=sum(1 for metric in metric_results if metric.status == MetricStatus.ERROR),
+        judge_coverage=judge_completed / len(judge_metrics) if judge_metrics else 0.0,
+        avg_correctness_score=_average_metric(results, "answer_correctness"),
+        avg_fact_coverage_score=_average_metric(results, "required_fact_coverage"),
+        avg_retrieval_recall=_average_metric(results, "recall_at_k"),
+        avg_retrieval_mrr=_average_metric(results, "mrr"),
+        single_p95_latency_ms=_p95(single_latencies),
+        dialogue_p95_latency_ms=_p95(dialogue_latencies),
+        total_token_count=sum(_token_count(metric.token_usage) for metric in metric_results),
+        estimated_cost=sum(float(metric.details.get("estimated_cost", 0.0) or 0.0) for metric in metric_results),
     )

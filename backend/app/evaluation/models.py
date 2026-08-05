@@ -1,6 +1,41 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Mapping
+
+
+class RunStatus(str, Enum):
+    CREATED = "created"
+    RUNNING = "running"
+    SCORING = "scoring"
+    COMPLETED = "completed"
+    INVALID = "INVALID"
+    CANCELLED = "cancelled"
+
+
+class GateMode(str, Enum):
+    CALIBRATION = "CALIBRATION"
+    BLOCKING = "BLOCKING"
+
+
+class GateOutcome(str, Enum):
+    PASSED = "PASSED"
+    FAILED = "FAILED"
+    INVALID = "INVALID"
+
+
+ALLOWED_RUN_TRANSITIONS: Mapping[RunStatus, frozenset[RunStatus]] = MappingProxyType({
+    RunStatus.CREATED: frozenset({RunStatus.RUNNING}),
+    RunStatus.RUNNING: frozenset({RunStatus.SCORING, RunStatus.INVALID, RunStatus.CANCELLED}),
+    RunStatus.SCORING: frozenset({RunStatus.COMPLETED}),
+    RunStatus.COMPLETED: frozenset(),
+    RunStatus.INVALID: frozenset(),
+    RunStatus.CANCELLED: frozenset(),
+})
+
+
+def can_transition(source: RunStatus, target: RunStatus) -> bool:
+    return target in ALLOWED_RUN_TRANSITIONS[source]
 
 
 class MetricStatus(str, Enum):
@@ -103,7 +138,7 @@ class CaseResult:
 @dataclass(frozen=True)
 class EvaluationRunSummary:
     run_id: str
-    status: str
+    status: str | RunStatus
     case_total: int
     case_passed: int
     pass_rate: float
@@ -118,6 +153,17 @@ class EvaluationRunSummary:
     category_pass_rates: dict[str, float] = field(default_factory=dict)
     avg_faithfulness_score: float | None = None
     knowledge_base_id: str | None = None
+    completed_count: int = 0
+    error_count: int = 0
+    judge_coverage: float = 0.0
+    avg_correctness_score: float | None = None
+    avg_fact_coverage_score: float | None = None
+    avg_retrieval_recall: float | None = None
+    avg_retrieval_mrr: float | None = None
+    single_p95_latency_ms: float = 0.0
+    dialogue_p95_latency_ms: float = 0.0
+    total_token_count: int = 0
+    estimated_cost: float = 0.0
 
 
 # 表示一次评测运行是否满足上线质量门禁，以及不通过的具体原因。
@@ -125,6 +171,14 @@ class EvaluationRunSummary:
 class GateResult:
     passed: bool
     reasons: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class GateDecision:
+    outcome: GateOutcome
+    absolute_reasons: list[str] = field(default_factory=list)
+    regression_reasons: list[str] = field(default_factory=list)
+    validity_reasons: list[str] = field(default_factory=list)
 
 
 # 表示两次评测运行之间的用例状态变化。
@@ -136,6 +190,8 @@ class ComparisonResult:
     new_case_ids: list[str] = field(default_factory=list)
     removed_case_ids: list[str] = field(default_factory=list)
     pass_rate_delta: float = 0.0
+    metric_deltas: dict[str, float] = field(default_factory=dict)
+    case_regression_reasons: list[str] = field(default_factory=list)
 
 
 # 表示一次评测运行的完整报告，包含汇总、门禁和所有用例明细。

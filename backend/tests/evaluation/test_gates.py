@@ -1,5 +1,10 @@
-from app.evaluation.gates import evaluate_gates
-from app.evaluation.models import EvaluationRunSummary
+from app.evaluation.gates import (
+    GateThresholds,
+    evaluate_absolute_gate,
+    evaluate_gates,
+    evaluate_run_validity,
+)
+from app.evaluation.models import EvaluationRunSummary, GateOutcome, GateMode
 
 
 # 构造评测汇总，方便门禁测试只关注上线规则。
@@ -51,3 +56,56 @@ def test_gate_passes_when_all_rules_satisfy():
 
     assert result.passed is True
     assert result.reasons == []
+
+
+def _release_summary(**overrides) -> EvaluationRunSummary:
+    values = {
+        "run_id": "release-1",
+        "status": "completed",
+        "case_total": 20,
+        "case_passed": 20,
+        "pass_rate": 1.0,
+        "p0_total": 2,
+        "p0_passed": 2,
+        "completed_count": 20,
+        "judge_coverage": 1.0,
+        "avg_correctness_score": 0.9,
+        "avg_fact_coverage_score": 0.9,
+        "avg_faithfulness_score": 0.95,
+        "p95_latency_ms": 1000.0,
+    }
+    values.update(overrides)
+    return EvaluationRunSummary(**values)
+
+
+def test_run_is_invalid_when_judge_coverage_is_incomplete():
+    decision = evaluate_run_validity(_release_summary(judge_coverage=0.95))
+
+    assert decision.outcome == GateOutcome.INVALID
+    assert decision.validity_reasons
+
+
+def test_run_is_invalid_when_judge_coverage_has_no_samples():
+    decision = evaluate_run_validity(_release_summary(judge_coverage=0.0))
+
+    assert decision.outcome == GateOutcome.INVALID
+
+
+def test_absolute_gate_fails_each_non_compensating_quality_threshold():
+    decision = evaluate_absolute_gate(
+        _release_summary(pass_rate=0.84, p0_passed=1, avg_faithfulness_score=0.89),
+        GateThresholds(),
+    )
+
+    assert decision.outcome == GateOutcome.FAILED
+    assert len(decision.absolute_reasons) == 3
+
+
+def test_calibration_quality_failures_are_non_blocking_only_after_validity_passes():
+    decision = evaluate_absolute_gate(
+        _release_summary(pass_rate=0.84),
+        GateThresholds(mode=GateMode.CALIBRATION),
+    )
+
+    assert decision.outcome == GateOutcome.PASSED
+    assert decision.absolute_reasons
