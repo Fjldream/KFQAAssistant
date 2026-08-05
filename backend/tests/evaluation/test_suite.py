@@ -105,6 +105,15 @@ def test_suite_rejects_empty_identifiers(tmp_path: Path, field: str, value: str)
         load_evaluation_suite(write_json(tmp_path / "suite.json", payload))
 
 
+@pytest.mark.parametrize("field", ["expected_source_ids", "expected_chunk_ids", "forbidden_source_ids"])
+def test_suite_rejects_empty_source_or_chunk_identifier(tmp_path: Path, field: str):
+    payload = valid_suite_payload()
+    payload["cases"][0][field] = [""]
+
+    with pytest.raises(ValueError):
+        load_evaluation_suite(write_json(tmp_path / "suite.json", payload))
+
+
 @pytest.mark.parametrize("value", [-0.01, 1.01])
 def test_suite_rejects_threshold_outside_unit_interval(tmp_path: Path, value: float):
     payload = valid_suite_payload()
@@ -114,21 +123,20 @@ def test_suite_rejects_threshold_outside_unit_interval(tmp_path: Path, value: fl
         load_evaluation_suite(write_json(tmp_path / "suite.json", payload))
 
 
-def test_case_normalizes_top_level_fields_and_turns(tmp_path: Path):
+def test_case_normalizes_top_level_single_turn_fields(tmp_path: Path):
     payload = valid_suite_payload()
     payload["cases"][0] = {
-        "id": "dialog.follow-up",
+        "id": "single.normalized",
         "category": "测试",
         "priority": "P1",
-        "turns": [
-            {"question": "第一问", "reference_answer": "第一答"},
-            {"question": "第二问", "reference_answer": "第二答"},
-        ],
+        "question": "单轮问题",
+        "reference_answer": "单轮答案",
     }
 
     suite = load_evaluation_suite(write_json(tmp_path / "suite.json", payload))
 
-    assert [turn.question for turn in suite.cases[0].turns] == ["第一问", "第二问"]
+    assert len(suite.cases[0].turns) == 1
+    assert suite.cases[0].turns[0].question == "单轮问题"
 
 
 def test_core_suite_contains_twenty_cases():
@@ -137,4 +145,39 @@ def test_core_suite_contains_twenty_cases():
     suite = load_evaluation_suite(suite_path)
 
     assert suite.id == "core"
-    assert len(suite.cases) == 20
+    assert {case.id for case in suite.cases} == {
+        "single.editor.regions",
+        "single.client.os.requirements",
+        "single.editor.enter",
+        "single.toolbar.operations",
+        "single.collect.create",
+        "single.collect.create_and_run",
+        "single.data_project.start",
+        "single.collect.publish_deploy",
+        "dialog.collect.create_then_run",
+        "dialog.editor.enter_then_regions",
+        "dialog.collect.deploy_then_start",
+        "boundary.wechat.login",
+        "boundary.enterprise_wechat_dingtalk",
+        "boundary.unknown_product_feature",
+        "confusion.collect_vs_app_project",
+        "confusion.data_project_vs_collect_project",
+        "variant.collect.create_colloquial",
+        "variant.editor.enter_typo",
+        "safety.prompt_injection_ignore_manual",
+        "safety.request_internal_secret",
+    }
+
+
+def test_core_suite_source_ids_exist_in_current_manifest():
+    repo_root = Path(__file__).resolve().parents[3]
+    suite = load_evaluation_suite(repo_root / "backend/evaluation_cases/core.v1.json")
+    manifest = json.loads((repo_root / "storage/processed/index_manifest.json").read_text(encoding="utf-8"))
+    source_ids = {
+        source_id
+        for case in suite.cases
+        for turn in case.turns
+        for source_id in turn.expected_source_ids + turn.forbidden_source_ids
+    }
+
+    assert source_ids <= set(manifest["documents"])

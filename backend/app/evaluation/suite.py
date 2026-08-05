@@ -1,8 +1,11 @@
 import hashlib
 import json
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+NonEmptyIdentifier = Annotated[str, Field(min_length=1)]
 
 
 class RequiredFact(BaseModel):
@@ -29,9 +32,9 @@ class EvaluationTurnSpec(BaseModel):
     required_facts: list[RequiredFact] = Field(default_factory=list)
     keyword_anchors: list[str] = Field(default_factory=list)
     forbidden_facts: list[str] = Field(default_factory=list)
-    expected_source_ids: list[str] = Field(default_factory=list)
-    expected_chunk_ids: list[str] = Field(default_factory=list)
-    forbidden_source_ids: list[str] = Field(default_factory=list)
+    expected_source_ids: list[NonEmptyIdentifier] = Field(default_factory=list)
+    expected_chunk_ids: list[NonEmptyIdentifier] = Field(default_factory=list)
+    forbidden_source_ids: list[NonEmptyIdentifier] = Field(default_factory=list)
     expect_no_answer: bool = False
     expect_images: bool = False
     min_sources: int = Field(default=0, ge=0)
