@@ -48,9 +48,16 @@ def judge_claim_support(judge: JudgeProtocol, claim: str, contexts: list[str]) -
         SUPPORT_SYSTEM_PROMPT,
         f"声明：{claim}\n\n手册片段：\n{context_text}",
     )
+    raw = data.get("supported", False)
+    if isinstance(raw, bool):
+        supported = raw
+    elif isinstance(raw, str):
+        supported = raw.strip().lower() in ("true", "1", "yes")
+    else:
+        supported = bool(raw)
     return ClaimJudgement(
         claim=claim,
-        supported=bool(data.get("supported", False)),
+        supported=supported,
         evidence=str(data.get("evidence", "")),
     )
 

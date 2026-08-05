@@ -80,7 +80,11 @@ def test_repository_migrates_old_schema(tmp_path: Path):
     repo = EvaluationRepository(db_path)
     repo.initialize()
     conn = sqlite3.connect(db_path)
-    cols = [row[1] for row in conn.execute("PRAGMA table_info(evaluation_turn_results)")]
-    assert "faithfulness_score" in cols
-    assert "faithfulness_claims_json" in cols
+    turn_cols = [row[1] for row in conn.execute("PRAGMA table_info(evaluation_turn_results)")]
+    assert "faithfulness_score" in turn_cols
+    assert "faithfulness_claims_json" in turn_cols
+    assert "faithfulness_elapsed_ms" in turn_cols
+    run_cols = [row[1] for row in conn.execute("PRAGMA table_info(evaluation_runs)")]
+    assert "avg_faithfulness_score" in run_cols
+    assert "knowledge_base_id" in run_cols
     conn.close()

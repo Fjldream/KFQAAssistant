@@ -16,6 +16,10 @@
       <span>P95</span>
       <strong>{{ formatMs(summary?.p95_latency_ms ?? 0) }}</strong>
     </div>
+    <div class="ke-metric">
+      <span>平均忠实度</span>
+      <strong>{{ formatPercent(avgFaithfulness ?? 0) }}</strong>
+    </div>
     <div class="ke-gate" :class="gatePassed ? 'is-pass' : 'is-fail'">
       <span>门禁</span>
       <strong>{{ gatePassed ? "通过" : "未通过" }}</strong>
@@ -33,6 +37,11 @@ const props = defineProps<{
 
 const summary = computed(() => props.detail?.summary ?? null);
 const gatePassed = computed(() => props.detail?.gate_result.passed ?? false);
+// 运行摘要可能携带平均忠实度（可选字段），类型中未声明故做窄化访问。
+const avgFaithfulness = computed<number | null>(() => {
+  const value = (props.detail?.summary as { avg_faithfulness_score?: number | null } | null)?.avg_faithfulness_score;
+  return typeof value === "number" ? value : null;
+});
 
 // 将小数通过率格式化成百分比文本。
 function formatPercent(value: number): string {

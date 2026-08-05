@@ -41,6 +41,12 @@ def summarize_case_results(results: list[CaseResult]) -> EvaluationRunSummary:
     single_results = [result for result in results if result.case_type == "single"]
     dialogue_results = [result for result in results if result.case_type == "dialogue"]
     latencies = [result.elapsed_ms for result in results]
+    faithfulness_scores = [
+        turn.faithfulness_score
+        for result in results
+        for turn in result.turn_results
+        if turn.faithfulness_score is not None
+    ]
 
     return EvaluationRunSummary(
         run_id=f"eval-{uuid4().hex}",
@@ -57,4 +63,5 @@ def summarize_case_results(results: list[CaseResult]) -> EvaluationRunSummary:
         dialogue_total=len(dialogue_results),
         dialogue_passed=sum(1 for result in dialogue_results if result.passed),
         category_pass_rates=_category_pass_rates(results),
+        avg_faithfulness_score=mean(faithfulness_scores) if faithfulness_scores else None,
     )

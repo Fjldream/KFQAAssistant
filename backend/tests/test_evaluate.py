@@ -3,8 +3,15 @@ import sys
 from pathlib import Path
 
 import scripts.evaluate as evaluate_module
+from app.evaluation.judge import JudgementError
 from app.schemas.chat import ChatResponse, SourceSnippet
 from scripts.evaluate import eval_result_to_dict, evaluate_question, load_eval_questions, main, summarize_results
+
+
+class NetworklessJudge:
+    # 语义评测的假客户端：任何补全请求都抛错，确保 main 测试不触发真实 DeepSeek 调用。
+    def complete_json(self, system_prompt: str, user_prompt: str) -> dict:
+        raise JudgementError()
 
 
 class FakeChain:
@@ -216,6 +223,7 @@ def test_evaluate_main_writes_json_report_and_returns_zero_for_passing_questions
         encoding="utf-8",
     )
     monkeypatch.setattr(evaluate_module, "create_rag_chain", lambda: FakeChain())
+    monkeypatch.setattr(evaluate_module, "create_judgement_client", lambda settings: NetworklessJudge())
     monkeypatch.setattr(
         sys,
         "argv",
@@ -237,6 +245,7 @@ def test_evaluate_main_returns_one_for_failed_questions(tmp_path: Path, monkeypa
         encoding="utf-8",
     )
     monkeypatch.setattr(evaluate_module, "create_rag_chain", lambda: FakeChain())
+    monkeypatch.setattr(evaluate_module, "create_judgement_client", lambda settings: NetworklessJudge())
     monkeypatch.setattr(sys, "argv", ["evaluate", "--file", str(eval_file)])
 
     assert main() == 1

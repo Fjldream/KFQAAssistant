@@ -35,6 +35,16 @@ def test_judge_claim_support_parses_verdict():
     assert judgement == ClaimJudgement(claim="按钮 B 不存在", supported=False, evidence="")
 
 
+def test_judge_claim_support_coerces_string_supported_flags():
+    judge = FakeJudge({"support": [{"supported": "false", "evidence": ""}]})
+    judgement = judge_claim_support(judge, "编造的声明", ["手册片段"])
+    assert judgement == ClaimJudgement(claim="编造的声明", supported=False, evidence="")
+
+    judge = FakeJudge({"support": [{"supported": "true", "evidence": "依据"}]})
+    judgement = judge_claim_support(judge, "有依据的声明", ["手册片段"])
+    assert judgement == ClaimJudgement(claim="有依据的声明", supported=True, evidence="依据")
+
+
 def test_compute_faithfulness_scores_supported_ratio():
     judge = FakeJudge({
         "split": {"claims": ["句1", "句2", "句3"]},
@@ -54,6 +64,43 @@ def test_compute_faithfulness_scores_supported_ratio():
 def test_compute_faithfulness_returns_none_for_no_answer():
     judge = FakeJudge({})
     result = compute_faithfulness(judge, "手册中没有找到相关说明。", ["上下文"])
+    assert result.score is None
+    assert result.claims == []
+
+
+def test_compute_faithfulness_returns_none_for_empty_answer():
+    judge = FakeJudge({})
+    result = compute_faithfulness(judge, "", ["上下文"])
+    assert result.score is None
+    assert result.claims == []
+
+
+def test_compute_faithfulness_returns_none_for_empty_contexts():
+    judge = FakeJudge({})
+    result = compute_faithfulness(judge, "回答内容", [])
+    assert result.score is None
+    assert result.claims == []
+
+
+def test_compute_faithfulness_returns_none_when_split_returns_empty_claims():
+    judge = FakeJudge({"split": {"claims": []}})
+    result = compute_faithfulness(judge, "回答内容", ["上下文"])
+    assert result.score is None
+    assert result.claims == []
+
+
+def test_compute_faithfulness_returns_none_when_all_judgements_fail():
+    class AllSupportFailJudge(FakeJudge):
+        def complete_json(self, system_prompt, user_prompt):
+            if "判" in system_prompt:
+                raise JudgementError()
+            return super().complete_json(system_prompt, user_prompt)
+
+    judge = AllSupportFailJudge({
+        "split": {"claims": ["句1", "句2"]},
+        "support": [{"supported": True, "evidence": "依据"}],
+    })
+    result = compute_faithfulness(judge, "回答内容", ["上下文"])
     assert result.score is None
     assert result.claims == []
 

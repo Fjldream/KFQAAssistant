@@ -47,3 +47,8 @@ def test_register_and_get_metric_roundtrip():
 def test_register_duplicate_raises():
     with pytest.raises(ValueError):
         register_metric(METRIC_REGISTRY["faithfulness"])
+
+
+def test_get_metric_unknown_raises_key_error():
+    with pytest.raises(KeyError):
+        get_metric("unknown")
