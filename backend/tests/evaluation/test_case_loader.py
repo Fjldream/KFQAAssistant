@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from app.evaluation.case_loader import load_evaluation_cases
+from app.evaluation.case_loader import load_evaluation_cases, load_evaluation_suite
 
 
 # 验证旧版单轮 JSON 评测集可以平滑迁移为新的统一用例结构。
@@ -83,3 +83,27 @@ def test_loader_returns_empty_list_when_file_missing(tmp_path: Path):
     cases = load_evaluation_cases(tmp_path / "missing.json")
 
     assert cases == []
+
+
+# 验证旧关键词组迁移到 Suite 后变成事实约束，并明确标记为未人工审核。
+def test_suite_loader_marks_legacy_keyword_groups_as_unreviewed(tmp_path: Path):
+    path = tmp_path / "legacy.json"
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "legacy.collect.create",
+                    "question": "如何创建采集工程？",
+                    "expected_keyword_groups": [["新建工程", "新建数采工程"], ["名称"]],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    suite = load_evaluation_suite(path)
+
+    case = suite.cases[0]
+    assert case.legacy_unreviewed is True
+    assert [fact.text for fact in case.turns[0].required_facts] == ["新建工程 / 新建数采工程", "名称"]

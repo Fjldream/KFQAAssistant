@@ -26,6 +26,11 @@ def test_settings_defaults_are_local_friendly():
     assert settings.enable_conversation_rewrite is True
     assert settings.enable_conversation_summary is True
     assert settings.conversation_summary_every_n_turns == 3
+    assert settings.evaluation_db_path == repo_root / "storage/evaluation/kingiask_eval.db"
+    assert settings.evaluation_cases_path == repo_root / "backend/evaluation_cases/core.v1.json"
+    assert settings.evaluation_dialogues_path == repo_root / "backend/evaluation_cases/eval_dialogues.json"
+    assert settings.evaluation_fail_under == 0.8
+    assert settings.evaluation_max_p95_ms == 30000
 
 
 def test_settings_resolves_relative_runtime_paths_from_repo_root():
@@ -35,9 +40,15 @@ def test_settings_resolves_relative_runtime_paths_from_repo_root():
         data_dir=Path("custom/help"),
         chroma_persist_dir=Path("custom/chroma"),
         index_manifest_path=Path("custom/processed/index_manifest.json"),
+        evaluation_db_path=Path("custom/evaluation/eval.db"),
+        evaluation_cases_path=Path("custom/evaluation/cases.json"),
+        evaluation_dialogues_path=Path("custom/evaluation/dialogues.json"),
         _env_file=None,
     )
 
     assert settings.data_dir == repo_root / "custom/help"
     assert settings.chroma_persist_dir == repo_root / "custom/chroma"
     assert settings.index_manifest_path == repo_root / "custom/processed/index_manifest.json"
+    assert settings.evaluation_db_path == repo_root / "custom/evaluation/eval.db"
+    assert settings.evaluation_cases_path == repo_root / "custom/evaluation/cases.json"
+    assert settings.evaluation_dialogues_path == repo_root / "custom/evaluation/dialogues.json"

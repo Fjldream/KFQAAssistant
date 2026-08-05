@@ -55,8 +55,22 @@ class Settings(BaseSettings):
     enable_conversation_summary: bool = True
     conversation_summary_every_n_turns: int = 3
 
+    evaluation_db_path: Path = Path("storage/evaluation/kingiask_eval.db")
+    evaluation_cases_path: Path = Path("backend/evaluation_cases/core.v1.json")
+    evaluation_dialogues_path: Path = Path("backend/evaluation_cases/eval_dialogues.json")
+    evaluation_fail_under: float = 0.8
+    evaluation_max_p95_ms: float = 30000
+
     # 统一规范化运行数据路径，让本地、测试和容器入口共享同一套解析规则。
-    @field_validator("chroma_persist_dir", "index_manifest_path", "data_dir", mode="after")
+    @field_validator(
+        "chroma_persist_dir",
+        "index_manifest_path",
+        "data_dir",
+        "evaluation_db_path",
+        "evaluation_cases_path",
+        "evaluation_dialogues_path",
+        mode="after",
+    )
     @classmethod
     def normalize_runtime_paths(cls, value: Path) -> Path:
         return resolve_runtime_path(value)
