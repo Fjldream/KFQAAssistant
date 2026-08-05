@@ -72,11 +72,24 @@ def _status_value(status: str | RunStatus) -> str:
     return status.value if isinstance(status, RunStatus) else str(status)
 
 
+def _redacted_snapshot(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            key: _redacted_snapshot(item)
+            for key, item in value.items()
+            if not any(marker in key.lower() for marker in ("api_key", "authorization", "secret", "token"))
+        }
+    if isinstance(value, list):
+        return [_redacted_snapshot(item) for item in value]
+    return value
+
+
 def _build_report(
     detail: EvaluationRunDetail,
     suite: EvaluationSuite,
     mode: GateMode,
     baseline_run_id: str | None,
+    snapshot: dict,
     absolute,
     regression,
 ) -> dict[str, object]:
@@ -84,6 +97,7 @@ def _build_report(
     return {
         "run_id": detail.summary.run_id,
         "suite": {"id": suite.id, "version": suite.version},
+        "snapshot": _redacted_snapshot(snapshot),
         "status": _status_value(detail.summary.status),
         "mode": mode.value.lower(),
         "baseline_run_id": baseline_run_id,
@@ -176,7 +190,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         absolute = evaluate_absolute_gate(detail.summary, thresholds)
         baseline = dependencies.repository.get_run(baseline_run_id) if baseline_run_id else None
         regression = evaluate_regression_gate(detail, baseline, thresholds) if baseline is not None else None
-        report = _build_report(detail, dependencies.suite, mode, baseline_run_id, absolute, regression)
+        report = _build_report(detail, dependencies.suite, mode, baseline_run_id, dependencies.snapshot, absolute, regression)
         _write_report(args.output, report)
         _print_detail(detail, dependencies.suite, baseline_run_id, args.output, absolute, regression)
         if args.approve_baseline:

@@ -49,10 +49,13 @@ DEEPSEEK_API_KEY=你的 DeepSeek API Key
 ```text
 APP_ENV=local
 DISABLE_AUTH=true
-CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+CORS_ALLOWED_ORIGINS=http://127.0.0.1:5174,http://localhost:5174
 DATA_DIR=data/help
 CHROMA_PERSIST_DIR=storage/chroma
 INDEX_MANIFEST_PATH=storage/processed/index_manifest.json
+EVALUATION_DB_PATH=storage/evaluation/kingiask_eval.db
+EVALUATION_CASES_PATH=backend/evaluation_cases/eval_questions.json
+EVALUATION_DIALOGUES_PATH=backend/evaluation_cases/eval_dialogues.json
 ```
 
 ## 3. 准备手册目录
@@ -181,7 +184,7 @@ Body raw JSON:
 新前端 `frontend/`（Apple 风格工作台，推荐）：
 
 ```bash
-cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/front"
+cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend"
 npm install
 npm run dev
 ```
@@ -195,14 +198,14 @@ http://127.0.0.1:5174
 生产构建：
 
 ```bash
-cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/front"
+cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend"
 npm run build
 ```
 
 运行测试：
 
 ```bash
-cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/front"
+cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend"
 npm run test
 ```
 
@@ -252,26 +255,44 @@ conda activate kf-rag
 python -m scripts.inspect_retrieval "如何创建采集工程，如何运行它呢？" --top-k 5 --no-rewrite
 ```
 
-## 12. RAG 评估
+## 12. RAG 可信评测门禁
 
-运行评估集：
+评测中心的 Run 由后端执行和持久化；浏览器只负责创建、轮询、查看、取消和批准基准。Suite 为 `backend/evaluation_cases/core.v1.json`，包含 20 条人工审核用例；运行数据库为 `storage/evaluation/kingiask_eval.db`。
+
+首次校准或重新校准：
 
 ```bash
-cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/backend"
-conda activate kf-rag
-python -m scripts.evaluate
-python -m scripts.evaluate --output ../storage/reports/evaluation.json
+cd backend
+conda run -n kf-rag --no-capture-output \
+python -m scripts.evaluation_gate \
+  --suite core \
+  --mode calibration \
+  --output ../storage/reports/core-calibration.json
 ```
 
-评估题库位置：
+重复校准 3-5 次且不改动代码、索引或配置。仅在所有 Run 有效、P0 Judge 判断已人工复核、分数波动未不可预测地跨越阈值后，才在前端评测中心选择该完成的校准 Run，点击“批准基准”，填写批准人和备注并确认。
 
-```text
-backend/tests/eval_questions.json
+有已批准基准后，执行发布阻断检查：
+
+```bash
+cd backend
+conda run -n kf-rag --no-capture-output \
+python -m scripts.evaluation_gate \
+  --suite core \
+  --mode blocking \
+  --output ../storage/reports/core-blocking.json
+echo $?
 ```
 
-评估会检查答案关键词、资料来源、图片数量和拒答行为，并输出各规则通过率。存在失败题目时命令返回非零退出码；JSON 报告不会保存 API Key。
+退出码：`0` 表示有效 Run 同时通过绝对门禁和基准回归门禁；`1` 表示有效 Run 的真实质量失败；`2` 表示无效执行（包括缺少已批准基准）。`INVALID` 不是质量失败，而是 Case 未完成、Judge 覆盖率非 100%、指标错误、取消或依赖异常导致无法可靠判定。
 
-## 13. 测试
+绝对阈值：通过率 `>=80%`、全部 P0 通过、平均正确性 `>=80%`、平均事实覆盖 `>=80%`、平均忠实度 `>=90%`、P95 `<=30000ms`。基准门禁还会拒绝新的 P0 退化或严重幻觉、超过 5 个百分点的通过率下降，以及超过 `min(125% x baseline P95, 30000ms)` 的 P95。
+
+状态含义：`created` 等待执行，`running` 正在跑 Case，`scoring` 正在计算指标，`completed` 已有最终结果，`INVALID` 结果不可靠，`cancelled` 已取消。`FAILED` 是有效 Run 的门禁结果，不是 Run 状态。
+
+排查 Judge：在 Run 详情查看 Case 失败原因和 `ERROR` 指标错误码，并用 Run ID、时间和错误码查询后端日志。不要将 Judge 提示词、`.env`、API Key 或 Authorization 头写入工单、报告或 Git。完整操作说明见 `docs/evaluation/README.md`。
+
+## 14. 测试
 
 后端全量测试：
 
@@ -295,7 +316,7 @@ cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant/frontend"
 npm run build
 ```
 
-## 14. 轻量压测
+## 15. 轻量压测
 
 默认压测：
 
@@ -316,7 +337,7 @@ python -m scripts.load_test -n 20 -c 4 --question "如何创建采集工程？"
 
 压测报告包含成功率、平均耗时、P50/P95/P99、状态码分布和吞吐量。压测会调用真实问答接口，可能产生 DeepSeek 费用；启用后端认证时可追加 `--api-key`，接口地址使用 `--url` 指定。
 
-## 15. Docker Compose
+## 16. Docker Compose
 
 准备目录和配置：
 
@@ -361,7 +382,7 @@ cd "/Users/fengjinlong/Fjldream/AILearning/KF Assistant"
 docker compose down
 ```
 
-## 16. Git 常用命令
+## 17. Git 常用命令
 
 查看状态：
 
@@ -394,7 +415,7 @@ git push
 git push -u origin feature/kf-rag-v1
 ```
 
-## 17. 最常用启动顺序
+## 18. 最常用启动顺序
 
 终端 1：启动后端。
 
@@ -414,5 +435,5 @@ npm run dev
 浏览器打开：
 
 ```text
-http://127.0.0.1:5173
+http://127.0.0.1:5174
 ```

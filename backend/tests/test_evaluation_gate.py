@@ -184,6 +184,7 @@ def test_gate_writes_redacted_json_report_and_prints_run_summary(tmp_path: Path,
     captured = capsys.readouterr()
     assert payload["run_id"] == "run-local-1"
     assert payload["suite"] == {"id": "core", "version": "v1"}
+    assert payload["snapshot"] == {"suite_hash": "hash"}
     assert payload["baseline_run_id"] == "baseline-1"
     assert payload["failed_case_ids"] == ["case-1"]
     assert "Run ID: run-local-1" in captured.out
@@ -220,6 +221,7 @@ def test_gate_never_emits_settings_secrets(monkeypatch, tmp_path: Path, capsys):
     assert gate_module.main(["--suite", "core", "--mode", "calibration", "--output", str(output)]) == 0
 
     assert "super-secret-value" not in output.read_text(encoding="utf-8")
+    assert "deepseek_api_key" not in json.loads(output.read_text(encoding="utf-8"))["snapshot"]
     captured = capsys.readouterr()
     assert "super-secret-value" not in captured.out
     assert "super-secret-value" not in captured.err
