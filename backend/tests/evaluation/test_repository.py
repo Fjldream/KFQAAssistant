@@ -234,3 +234,40 @@ def test_repository_database_constraint_allows_only_one_active_status(tmp_path: 
             ) VALUES ('second-active', 'created', 'start', 'finish', 1, 0, 0, 0, 0, 0, 0, 0, '[]', '{}')
             """
         )
+
+
+def test_repository_migrates_legacy_database_with_multiple_active_statuses(tmp_path: Path):
+    db_path = tmp_path / "eval.db"
+    connection = sqlite3.connect(db_path)
+    connection.executescript("""
+        CREATE TABLE evaluation_runs (
+            id TEXT PRIMARY KEY, status TEXT NOT NULL, started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL, case_total INTEGER NOT NULL, case_passed INTEGER NOT NULL,
+            pass_rate REAL NOT NULL, p0_total INTEGER NOT NULL, p0_passed INTEGER NOT NULL,
+            avg_latency_ms REAL NOT NULL, p95_latency_ms REAL NOT NULL, gate_passed INTEGER NOT NULL,
+            gate_reasons_json TEXT NOT NULL, config_json TEXT NOT NULL, error TEXT
+        );
+        CREATE TABLE evaluation_turn_results (id TEXT PRIMARY KEY, run_id TEXT NOT NULL, case_result_id TEXT NOT NULL);
+        CREATE UNIQUE INDEX evaluation_runs_one_active ON evaluation_runs(status)
+            WHERE lower(status) IN ('created', 'running', 'scoring');
+    """)
+    for status in ("created", "running", "scoring"):
+        connection.execute(
+            """
+            INSERT INTO evaluation_runs VALUES (?, ?, 'start', 'finish', 1, 0, 0, 0, 0, 0, 0, 0, '[]', '{}', NULL)
+            """,
+            (status, status),
+        )
+    connection.commit()
+    connection.close()
+
+    repository = EvaluationRepository(db_path)
+    repository.initialize()
+
+    with repository._connect() as connection:
+        rows = connection.execute("SELECT status, error FROM evaluation_runs ORDER BY id").fetchall()
+    assert [(row["status"], row["error"]) for row in rows] == [
+        ("created", None),
+        ("INVALID", "process_interrupted"),
+        ("INVALID", "process_interrupted"),
+    ]

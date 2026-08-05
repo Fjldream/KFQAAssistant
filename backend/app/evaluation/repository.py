@@ -127,6 +127,7 @@ class EvaluationRepository:
             )
             # 旧库兼容：为早期创建的库补齐语义评估新列，不丢历史数据。
             self._ensure_columns(connection)
+            self._invalidate_interrupted_runs(connection)
             connection.execute("DROP INDEX IF EXISTS evaluation_runs_one_active")
             connection.execute(
                 "CREATE UNIQUE INDEX evaluation_runs_one_active "
@@ -135,7 +136,6 @@ class EvaluationRepository:
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS evaluation_baselines_current ON evaluation_baselines(suite_id, approved_at DESC)"
             )
-            self._invalidate_interrupted_runs(connection)
 
     # 旧库兼容：检测缺失的语义评估列并用 ALTER TABLE 补齐，避免历史数据丢失。
     def _ensure_columns(self, connection: sqlite3.Connection) -> None:
