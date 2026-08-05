@@ -1,4 +1,5 @@
 from app.rag.conversation.rewriter import rewrite_standalone_question
+from app.rag.conversation.rewriter import should_rewrite_standalone_question
 from app.schemas.chat import ChatHistoryMessage
 
 
@@ -51,3 +52,12 @@ def test_rewrite_standalone_question_falls_back_to_original_on_failure():
     )
 
     assert rewritten == "那怎么运行？"
+
+
+def test_should_rewrite_standalone_question_detects_inside_follow_up():
+    should_rewrite = should_rewrite_standalone_question(
+        question="里面主要有哪些区域？",
+        recent_messages=[ChatHistoryMessage(role="user", content="如何进入页面编辑器？")],
+    )
+
+    assert should_rewrite is True

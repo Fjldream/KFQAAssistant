@@ -7,6 +7,24 @@
     <main class="ka-app__main" aria-label="问答工作区">
       <div class="ka-topbar">
         <span class="ka-topbar__title">KingIAsk</span>
+        <nav class="ka-topbar__nav" aria-label="主导航">
+          <button
+            class="ka-topbar__tab"
+            :class="{ 'is-active': activeView === 'chat' }"
+            type="button"
+            @click="emit('viewChange', 'chat')"
+          >
+            问答助手
+          </button>
+          <button
+            class="ka-topbar__tab"
+            :class="{ 'is-active': activeView === 'evaluation' }"
+            type="button"
+            @click="emit('viewChange', 'evaluation')"
+          >
+            评测中心
+          </button>
+        </nav>
         <div class="ka-topbar__actions">
           <button
             class="ka-icon-button ka-mobile-menu"
@@ -35,6 +53,11 @@ import { Menu } from "lucide-vue-next";
 
 defineProps<{
   evidenceOpen: boolean;
+  activeView?: "chat" | "evaluation";
+}>();
+
+const emit = defineEmits<{
+  viewChange: [view: "chat" | "evaluation"];
 }>();
 
 const sidebarOpen = ref(false);

@@ -9,6 +9,7 @@ __pycache__/
 .venv/
 venv/
 storage/chroma/
+storage/evaluation/
 storage/processed/
 data/
 docs/learning_notes/

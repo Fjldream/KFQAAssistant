@@ -18,8 +18,8 @@ type StoredConversation = {
 const SESSION_STORAGE_KEY = "kingiask-widget:conversation:v1";
 const MAX_STORED_MESSAGES = 40;
 
-// 品牌 LOGO：企业 OEM 标志图片（运营平台提供），用于浮动入口与面板头部。
-const LOGO_IMG = `<img class="kiw-logo" src="https://192.168.3.32/opscenter/oemImg/leftIcon.png" alt="KingIAsk 标志" />`;
+// 品牌 LOGO：本地静态图片（OEM 图标），相对路径避免内网地址与证书问题。
+const LOGO_IMG = `<img class="kiw-logo" src="/logo.png" alt="KingIAsk 标志" />`;
 
 // 创建 HTML 元素并设置文本内容，避免把模型回答直接作为 HTML 注入。
 function textElement<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text: string): HTMLElementTagNameMap[K] {

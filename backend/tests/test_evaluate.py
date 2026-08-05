@@ -69,6 +69,9 @@ class ForbiddenSourceChain:
         )
 
 
+def test_default_eval_file_points_to_evaluation_cases_directory():
+    assert evaluate_module.DEFAULT_EVAL_FILE == Path("evaluation_cases/eval_questions.json")
+
 
 def test_load_eval_questions_reads_json_file(tmp_path: Path):
     eval_file = tmp_path / "eval.json"

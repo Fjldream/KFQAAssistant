@@ -3,8 +3,8 @@
 </template>
 
 <script setup lang="ts">
-// 企业 OEM 标志：由运营平台提供，替换默认的图形 LOGO。
-const LOGO_URL = "https://192.168.3.32/opscenter/oemImg/leftIcon.png";
+// 品牌 LOGO：本地静态图片（OEM 图标），用相对路径避免内网地址与证书问题。
+const LOGO_URL = "/logo.png";
 
 withDefaults(
   defineProps<{

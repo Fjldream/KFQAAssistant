@@ -12,6 +12,7 @@ from app.rag.generation.answer_policy import is_no_answer
 from app.rag.factory import create_rag_chain
 from app.schemas.chat import ChatResponse
 
+DEFAULT_EVAL_FILE = Path("evaluation_cases/eval_questions.json")
 
 
 class ChainProtocol(Protocol):

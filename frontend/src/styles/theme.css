@@ -247,6 +247,36 @@ textarea:focus-visible {
   letter-spacing: -0.01em;
 }
 
+.ka-topbar__nav {
+  position: absolute;
+  left: 50%;
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--ka-border);
+  border-radius: 8px;
+  background: var(--ka-surface);
+  padding: 3px;
+  transform: translateX(-50%);
+}
+
+.ka-topbar__tab {
+  height: 26px;
+  border-radius: 6px;
+  color: var(--ka-text-secondary);
+  font-size: 13px;
+  font-weight: 650;
+  padding: 0 12px;
+}
+
+.ka-topbar__tab:hover,
+.ka-topbar__tab.is-active {
+  background: var(--ka-surface-elevated);
+  color: var(--ka-text);
+  box-shadow: var(--ka-shadow-soft);
+}
+
 .ka-topbar__actions {
   display: flex;
   align-items: center;
@@ -725,7 +755,8 @@ textarea:focus-visible {
   min-height: 0;
   overflow-y: auto;
   padding: 6px 4px 10px;
-  scroll-behavior: smooth;
+  /* 滚动一律瞬移：切换会话/新消息/流式都直接定位到底部，不做平滑动画 */
+  scroll-behavior: auto;
 }
 
 .ka-welcome {
@@ -1894,4 +1925,110 @@ textarea:focus-visible {
   50% {
     opacity: 0;
   }
+}
+
+/* —— 会话轮次导航条 —— */
+.ka-chat__body {
+  position: relative;
+  min-height: 0;
+}
+
+.ka-chat__body .ka-messages {
+  height: 100%;
+}
+
+.ka-map {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  transform: translateY(-50%);
+}
+
+.ka-map__dot {
+  position: relative;
+  width: 8px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ka-text-tertiary);
+  opacity: 0.4;
+  transition:
+    background-color 180ms ease,
+    opacity 180ms ease,
+    transform 180ms var(--ka-ease-out);
+}
+
+.ka-map__dot:hover {
+  background: var(--ka-accent);
+  opacity: 1;
+  transform: scale(1.35);
+}
+
+/* 当前查看的轮次：高亮 + 放大 */
+.ka-map__dot.is-active {
+  background: var(--ka-accent);
+  opacity: 1;
+  transform: scale(1.55);
+}
+
+/* hover 预览：问题 + 回答开头，鼠标离开即消失 */
+.ka-map__tip {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  display: grid;
+  gap: 6px;
+  width: 250px;
+  border: 1px solid var(--ka-border);
+  border-radius: 12px;
+  background: var(--ka-surface-solid);
+  box-shadow: var(--ka-shadow-pop);
+  padding: 10px 12px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(6px);
+  transition:
+    opacity 140ms ease,
+    transform 180ms var(--ka-ease-out),
+    visibility 140ms;
+}
+
+.ka-map__dot:hover .ka-map__tip,
+.ka-map__dot:focus-visible .ka-map__tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
+}
+
+.ka-map__tip strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ka-map__tip span,
+.ka-map__tip em {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--ka-text-secondary);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ka-map__tip em {
+  color: var(--ka-text-tertiary);
 }

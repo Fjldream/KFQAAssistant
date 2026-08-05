@@ -51,7 +51,7 @@ async function parseError(response: Response): Promise<ApiError> {
 }
 
 // 封装所有后端请求，统一添加 API Key、解析 JSON 和转换错误。
-async function requestJson<T>(settings: ApiSettings, path: string, init: RequestInit = {}): Promise<T> {
+export async function requestJson<T>(settings: ApiSettings, path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
   if (settings.apiKey.trim()) {

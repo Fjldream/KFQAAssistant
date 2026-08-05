@@ -11,7 +11,8 @@
       </button>
     </header>
 
-    <div class="ka-messages" ref="messageListEl" aria-live="polite">
+    <div class="ka-chat__body">
+      <div class="ka-messages" ref="messageListEl" aria-live="polite">
       <div v-if="messages.length === 0" class="ka-welcome">
         <div class="ka-welcome__mark" aria-hidden="true">
           <LogoIcon :size="46" />
@@ -37,8 +38,9 @@
 
       <template v-else>
         <article
-          v-for="message in messages"
+          v-for="(message, index) in messages"
           :key="message.id"
+          :data-idx="index"
           class="ka-msg"
           :class="`ka-msg--${message.role}`"
         >
@@ -119,6 +121,9 @@
           </div>
         </article>
       </template>
+      </div>
+
+      <ConversationMap :messages="messages" :active-user-index="activeUserIndex" @jump="jumpToUserMessage" />
     </div>
 
     <p v-if="errorMessage" class="ka-error" role="alert">
@@ -169,8 +174,9 @@ import {
   Send,
   Trash2,
 } from "lucide-vue-next";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { ChatMessage, SourceSnippet } from "../api/types";
+import ConversationMap from "./ConversationMap.vue";
 import LogoIcon from "./LogoIcon.vue";
 
 const props = defineProps<{
@@ -206,17 +212,71 @@ const markdown = new MarkdownIt({
 // 只允许 http/https/mailto/锚点/相对链接，阻止 javascript: 等危险协议。
 markdown.validateLink = (url: string) => /^(https?:|mailto:|#|\/)/i.test(url);
 
-// 新消息出现时自动滚动到底部，保持最新内容可见。
+// 滚动到消息列表最底部，让最新内容始终可见。
+function scrollToBottom(): void {
+  const el = messageListEl.value;
+  if (el) {
+    el.scrollTop = el.scrollHeight;
+  }
+}
+
+// 点击轮次导航方块：滚动到该轮用户消息的位置。
+function jumpToUserMessage(userIndex: number): void {
+  const el = messageListEl.value;
+  if (!el) {
+    return;
+  }
+  const target = el.querySelector(`[data-idx="${userIndex}"]`) as HTMLElement | null;
+  if (target) {
+    el.scrollTop = Math.max(0, target.offsetTop - 10);
+  }
+}
+
+// 当前正在查看的轮次（用户消息下标），滚动时自动更新，用于导航条高亮。
+const activeUserIndex = ref<number | null>(null);
+
+// 根据滚动位置计算当前视野顶部附近的用户消息，作为"当前轮"。
+function updateActiveRound(): void {
+  const el = messageListEl.value;
+  if (!el) {
+    return;
+  }
+  const viewTop = el.scrollTop + 60;
+  let found: number | null = null;
+  props.messages.forEach((message, index) => {
+    if (message.role !== "user") {
+      return;
+    }
+    const node = el.querySelector(`[data-idx="${index}"]`) as HTMLElement | null;
+    if (node && node.offsetTop <= viewTop) {
+      found = index;
+    }
+  });
+  activeUserIndex.value = found;
+}
+
+// 打开应用、切换会话、新消息/流式内容变化时都自动滚到底部。
+// deep 监听覆盖：会话切换（数组引用变化）、push（长度变化）、流式内容增长。
 watch(
-  () => props.messages.length,
+  () => props.messages,
   async () => {
     await nextTick();
-    const el = messageListEl.value;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
+    scrollToBottom();
   },
+  { deep: true },
 );
+
+onMounted(() => {
+  void nextTick(() => {
+    scrollToBottom();
+    updateActiveRound();
+    messageListEl.value?.addEventListener("scroll", updateActiveRound, { passive: true });
+  });
+});
+
+onBeforeUnmount(() => {
+  messageListEl.value?.removeEventListener("scroll", updateActiveRound);
+});
 
 // 将 Markdown 回答转换为安全 HTML，用于展示模型返回的步骤和列表。
 function renderMarkdown(content: string): string {

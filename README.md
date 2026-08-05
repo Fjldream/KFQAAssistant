@@ -2,7 +2,7 @@
 
 KingIAsk 是一个面向 KF 产品使用手册的企业级 RAG 问答助手。它会从 `data/help` 加载手册文档，构建本地 Chroma 向量库，再通过 DeepSeek 生成带资料来源和相关图片的回答。
 
-当前版本优先保证本地轻量可运行，同时保留企业级产品需要的接口、配置、健康检查、评估和压测入口。
+当前版本优先保证本地轻量可运行，同时保留企业级产品需要的接口、配置、健康检查、评测中心和压测入口。
 
 ## 已支持能力
 
@@ -15,16 +15,17 @@ KingIAsk 是一个面向 KF 产品使用手册的企业级 RAG 问答助手。�
 - 支持向量检索和关键词召回混合排序。
 - 支持资料来源去重、证据编号、图片数量限制和拒答保护。
 - 提供 FastAPI 问答接口、KingIAsk Vue 前端和 Streamlit 轻量 Demo 页面。
-- 提供索引状态、就绪检查、评估脚本和轻量压测脚本。
+- 提供索引状态、就绪检查、评测中心、评估脚本和轻量压测脚本。
 
 ## 目录说明
 
 ```text
-backend/          FastAPI RAG 后端，包含 API、RAG 核心代码、脚本和测试
-frontend/            KingIAsk 前端工作台（Apple 风格，推荐）
+backend/          FastAPI RAG 后端，包含 API、RAG 核心代码、评测系统、脚本和测试
+frontend/         KingIAsk 前端工作台（Apple 风格，推荐）
 frontend-legacy/  旧版 KingIAsk Vue 前端工作台（已弃用，仅存档）
 data/             KF 产品手册原始文档，本地放置，不提交仓库
 storage/          Chroma 向量库和增量索引清单，本地生成，不提交仓库
+docs/evaluation/  RAG 评测中心使用说明
 docs/             本地学习和设计文档，不提交仓库
 .env.example      可提交的环境变量样例
 .env              本地真实配置，不提交仓库
@@ -54,7 +55,7 @@ DEEPSEEK_API_KEY=你的 DeepSeek API Key
 前端使用 Vue 3、Vite 和 npm。进入 `frontend/` 后安装依赖：
 
 ```bash
-cd front
+cd frontend
 npm install
 ```
 
@@ -92,13 +93,13 @@ uvicorn app.main:app --reload
 
 ```bash
 cd frontend
-pnpm run dev
+npm run dev
 ```
 
 浏览器打开：
 
 ```text
-http://127.0.0.1:5173
+http://127.0.0.1:5174
 ```
 
 ## 关键配置
@@ -109,7 +110,7 @@ http://127.0.0.1:5173
 APP_ENV=local
 DISABLE_AUTH=true
 APP_API_KEY=
-CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+CORS_ALLOWED_ORIGINS=http://127.0.0.1:5174,http://localhost:5174
 
 DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=https://api.deepseek.com
@@ -127,6 +128,11 @@ TOP_K=5
 MAX_IMAGES_PER_SOURCE=5
 MAX_IMAGES_PER_ANSWER=8
 KF_RAG_API_URL=http://127.0.0.1:8000/api/chat
+EVALUATION_DB_PATH=storage/evaluation/kingiask_eval.db
+EVALUATION_CASES_PATH=backend/evaluation_cases/eval_questions.json
+EVALUATION_DIALOGUES_PATH=backend/evaluation_cases/eval_dialogues.json
+EVALUATION_FAIL_UNDER=0.8
+EVALUATION_MAX_P95_MS=30000
 ```
 
 `TOP_K` 表示每次问答检索多少个相关 chunk。值越大，可用资料越多，但大模型上下文更长、速度可能更慢。
@@ -213,7 +219,7 @@ http://127.0.0.1:8000/manuals/<手册内相对路径>
 先启动 API 服务，再运行：
 
 ```bash
-cd front
+cd frontend
 npm install
 npm run dev
 ```
@@ -227,6 +233,34 @@ http://127.0.0.1:5174
 如果后端地址不是 `http://127.0.0.1:8000`，可以在前端页面右上角设置里修改 API 地址。前端会把设置保存到浏览器本地存储，刷新页面后继续复用。
 
 如果页面显示“后端未连接”，先确认后端服务已经启动，并检查 `.env` 中的 `CORS_ALLOWED_ORIGINS` 是否包含当前前端地址，例如 `http://127.0.0.1:5174`。
+
+## 使用评测中心
+
+先启动后端和前端，然后打开：
+
+```text
+http://127.0.0.1:5174
+```
+
+点击顶部“评测中心”，可以查看用例、运行评测、查看报告详情和最近两次运行对比。
+
+评测用例目录：
+
+```text
+backend/evaluation_cases/
+```
+
+评测运行结果默认保存到：
+
+```text
+storage/evaluation/kingiask_eval.db
+```
+
+更详细说明见：
+
+```text
+docs/evaluation/README.md
+```
 
 > 旧版前端已更名为 `frontend-legacy/`，仅作存档，不再维护。
 
@@ -476,7 +510,7 @@ python -m scripts.ask "页面编辑器主要包括哪些区域？"
 评估集位于：
 
 ```text
-backend/tests/eval_questions.json
+backend/evaluation_cases/eval_questions.json
 ```
 
 运行评估：
@@ -488,6 +522,8 @@ python -m scripts.evaluate --output ../storage/reports/evaluation.json
 ```
 
 评估脚本会检查回答关键词、来源关键词、拒答行为和图片返回数量，并输出总通过率以及各规则通过率。它不是最终人工验收标准，但能快速发现检索跑偏、回答缺关键点、该拒答时没有拒答等问题。存在失败题目时命令返回非零退出码，适合后续接入 CI；`--output` 可以保存结构化 JSON 报告。
+
+更推荐的产品化方式是打开前端“评测中心”，在页面中运行评测、查看历史报告和最近两次结果对比。详细说明见 `docs/evaluation/README.md`。
 
 ## 检索调试
 

@@ -1,5 +1,9 @@
 <template>
-  <AppShell :evidence-open="evidenceOpen">
+  <AppShell
+    :evidence-open="activeView === 'chat' && evidenceOpen"
+    :active-view="activeView"
+    @view-change="handleViewChange"
+  >
     <template #sidebar>
       <SidebarPanel
         :health-label="healthLabel"
@@ -24,6 +28,7 @@
     </template>
 
     <ChatWorkspace
+      v-if="activeView === 'chat'"
       :messages="chat.messages.value"
       :is-asking="chat.isAsking.value"
       :error-message="chat.errorMessage.value || indexStatus.errorMessage.value"
@@ -33,10 +38,11 @@
       @retry="chat.retryLastQuestion"
       @select-source="handleSelectSource"
     />
+    <EvaluationCenter v-else :client="evaluationClient" />
 
     <template #evidence>
       <EvidencePanel
-        v-if="evidenceOpen"
+        v-if="activeView === 'chat' && evidenceOpen"
         :sources="currentSources"
         :selected-source="chat.selectedSource.value"
         @open-material="openMaterial"
@@ -82,6 +88,8 @@ import { useLocalHistory } from "./composables/useLocalHistory";
 import { useSessions } from "./composables/useSessions";
 import { useSettings } from "./composables/useSettings";
 import { useTheme } from "./composables/useTheme";
+import { createEvaluationApiClient } from "./features/evaluation/api";
+import EvaluationCenter from "./features/evaluation/EvaluationCenter.vue";
 
 const commonQuestions = [
   "如何创建采集工程？",
@@ -99,8 +107,11 @@ const indexStatus = useIndexStatus(settings.settings);
 const settingsOpen = ref(false);
 const previewImage = ref<string | null>(null);
 const materialSource = ref<SourceSnippet | null>(null);
+const activeView = ref<"chat" | "evaluation">("chat");
 // 资料中心默认收起：回答后点击消息里的资料 chip 才会滑出。
 const evidenceOpen = ref(false);
+
+const evaluationClient = computed(() => createEvaluationApiClient(settings.settings.value));
 
 const healthLabel = computed(() => {
   if (indexStatus.isLoading.value) {
@@ -172,6 +183,14 @@ function handleSelectSource(source: SourceSnippet | null): void {
   chat.selectSource(source);
   if (source) {
     evidenceOpen.value = true;
+  }
+}
+
+// 切换主工作区视图；进入评测中心时收起资料中心，避免占用报告空间。
+function handleViewChange(view: "chat" | "evaluation"): void {
+  activeView.value = view;
+  if (view === "evaluation") {
+    evidenceOpen.value = false;
   }
 }
 
