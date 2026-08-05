@@ -127,9 +127,10 @@ class EvaluationRepository:
             )
             # 旧库兼容：为早期创建的库补齐语义评估新列，不丢历史数据。
             self._ensure_columns(connection)
+            connection.execute("DROP INDEX IF EXISTS evaluation_runs_one_active")
             connection.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS evaluation_runs_one_active "
-                "ON evaluation_runs(status) WHERE lower(status) IN ('created', 'running', 'scoring')"
+                "CREATE UNIQUE INDEX evaluation_runs_one_active "
+                "ON evaluation_runs((1)) WHERE lower(status) IN ('created', 'running', 'scoring')"
             )
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS evaluation_baselines_current ON evaluation_baselines(suite_id, approved_at DESC)"
@@ -283,7 +284,9 @@ class EvaluationRepository:
                  self._json(case_result.failure_reasons)),
             )
             turn_ids = self._save_turn_results(connection, run_id, case_result_id, case_result.turn_results)
-            self._save_metric_results(connection, run_id, case_result_id, metric_results or [])
+            self._save_metric_results(
+                connection, run_id, case_result_id, [*case_result.metric_results, *(metric_results or [])]
+            )
             for turn_id, turn in zip(turn_ids, case_result.turn_results):
                 self._save_metric_results(connection, run_id, case_result_id, turn.metric_results, turn_id)
             connection.execute(
@@ -500,6 +503,7 @@ class EvaluationRepository:
                     ),
                 )
                 turn_ids = self._save_turn_results(connection, summary.run_id, case_result_id, case_result.turn_results)
+                self._save_metric_results(connection, summary.run_id, case_result_id, case_result.metric_results)
                 for turn_id, turn in zip(turn_ids, case_result.turn_results):
                     self._save_metric_results(connection, summary.run_id, case_result_id, turn.metric_results, turn_id)
         return summary.run_id
@@ -662,6 +666,7 @@ class EvaluationRepository:
             turn_results=turn_results,
             failure_reasons=json.loads(row["failure_reasons_json"]),
             elapsed_ms=float(row["elapsed_ms"]),
+            metric_results=self._load_metric_results(connection, str(row["id"])),
         )
 
     def _load_metric_results(

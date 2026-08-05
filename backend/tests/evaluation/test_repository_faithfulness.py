@@ -111,3 +111,17 @@ def test_repository_checkpoints_case_and_generic_metrics_together(tmp_path: Path
     detail = repository.get_run(run_id)
     assert detail is not None
     assert detail.case_results[0].turn_results[0].metric_results == metrics
+
+
+def test_repository_roundtrips_case_level_generic_metrics(tmp_path: Path):
+    repository = EvaluationRepository(tmp_path / "eval.db")
+    run_id = repository.create_run("core", "v1", "hash", {}, "CALIBRATION", case_total=1)
+    repository.transition_run(run_id, "running")
+    metrics = [MetricResult(name="case_score", score=0.7, status=MetricStatus.PASSED, details={"scope": "case"})]
+    case = CaseResult(case_id="c1", category="cat", priority="P1", case_type="single", passed=True, turn_results=[_turn()])
+
+    repository.save_case_result(run_id, case, metrics)
+
+    detail = repository.get_run(run_id)
+    assert detail is not None
+    assert detail.case_results[0].metric_results == metrics

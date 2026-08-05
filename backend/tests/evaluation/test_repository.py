@@ -217,3 +217,20 @@ def test_repository_invalidates_orphaned_active_run_on_initialize(tmp_path: Path
     with repository._connect() as connection:
         row = connection.execute("SELECT status, error FROM evaluation_runs WHERE id = 'orphaned'").fetchone()
     assert (row["status"], row["error"]) == ("INVALID", "process_interrupted")
+
+
+def test_repository_database_constraint_allows_only_one_active_status(tmp_path: Path):
+    repository = EvaluationRepository(tmp_path / "eval.db")
+    run_id = repository.create_run("core", "v1", "hash", {}, "CALIBRATION", case_total=1)
+    repository.transition_run(run_id, "running")
+
+    with repository._connect() as connection, pytest.raises(sqlite3.IntegrityError):
+        connection.execute(
+            """
+            INSERT INTO evaluation_runs (
+                id, status, started_at, finished_at, case_total, case_passed, pass_rate,
+                p0_total, p0_passed, avg_latency_ms, p95_latency_ms, gate_passed,
+                gate_reasons_json, config_json
+            ) VALUES ('second-active', 'created', 'start', 'finish', 1, 0, 0, 0, 0, 0, 0, 0, '[]', '{}')
+            """
+        )

@@ -132,6 +132,7 @@ class CaseResult:
     turn_results: list[TurnResult]
     failure_reasons: list[str] = field(default_factory=list)
     elapsed_ms: float = 0.0
+    metric_results: list[MetricResult] = field(default_factory=list)
 
 
 # 表示一次评测运行的汇总指标，供列表、总览和门禁判断复用。
