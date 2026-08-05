@@ -3,7 +3,7 @@ import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, Sequence
 
 from app.core.config import get_settings
 from app.evaluation.judge import create_judgement_client
@@ -255,11 +255,18 @@ def print_report(results: list[EvalResult]) -> None:
 
 
 # 命令行评估入口：批量运行评估集并用退出码标识质量门禁结果。
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if "--file" not in argv and not any(argument.startswith("--file=") for argument in argv):
+        print("scripts.evaluate is deprecated without --file; delegating to scripts.evaluation_gate.", file=sys.stderr)
+        from scripts.evaluation_gate import main as evaluation_gate_main
+
+        return evaluation_gate_main(argv)
+
     parser = argparse.ArgumentParser(description="评估 KF RAG 问答效果")
-    parser.add_argument("--file", type=Path, default=Path("tests/eval_questions.json"), help="评估问题 JSON 文件")
+    parser.add_argument("--file", type=Path, required=True, help="评估问题 JSON 文件")
     parser.add_argument("--output", type=Path, help="可选的 JSON 报告输出路径")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         questions = load_eval_questions(args.file)

@@ -262,6 +262,16 @@ def test_evaluate_main_reports_missing_file_in_chinese(tmp_path: Path, monkeypat
     assert "评测文件" in captured.err
 
 
+def test_evaluate_main_without_file_delegates_to_local_gate(monkeypatch, capsys):
+    import scripts.evaluation_gate as gate_module
+
+    monkeypatch.setattr(gate_module, "main", lambda argv: 1)
+
+    assert main(["--suite", "core", "--mode", "blocking"]) == 1
+
+    assert "deprecated" in capsys.readouterr().err
+
+
 def test_evaluate_question_records_faithfulness(monkeypatch):
     from scripts.evaluate import EvalResult, evaluate_question
     from app.schemas.chat import ChatResponse, SourceSnippet
@@ -276,7 +286,7 @@ def test_evaluate_question_records_faithfulness(monkeypatch):
     class FakeJudge:
         def complete_json(self, system_prompt, user_prompt):
             if "拆" in system_prompt:
-                return JudgementCompletion({"claims": ["按钮可配置颜色。"]})
+                return JudgementCompletion({"claims": [{"claim": "按钮可配置颜色。", "supported": True, "evidence": "按钮可配置颜色。"}]})
             return JudgementCompletion({"supported": True, "evidence": "按钮可配置颜色。"})
 
     result = evaluate_question(FakeChain(), "问题", [], [], False, False, judge=FakeJudge(), semantic_enabled=True)
