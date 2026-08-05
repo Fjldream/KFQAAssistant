@@ -29,7 +29,7 @@ def test_settings_defaults_are_local_friendly():
     assert settings.evaluation_db_path == repo_root / "storage/evaluation/kingiask_eval.db"
     assert settings.evaluation_cases_path == repo_root / "backend/evaluation_cases/core.v1.json"
     assert settings.evaluation_dialogues_path == repo_root / "backend/evaluation_cases/eval_dialogues.json"
-    assert settings.evaluation_fail_under == 0.8
+    assert settings.evaluation_fail_under == 0.85
     assert settings.evaluation_max_p95_ms == 30000
 
 
