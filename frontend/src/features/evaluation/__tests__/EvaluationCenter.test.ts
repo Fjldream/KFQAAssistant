@@ -1,8 +1,9 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EvaluationCenter from "../EvaluationCenter.vue";
+import EvaluationOverview from "../components/EvaluationOverview.vue";
 import type { EvaluationApiClient } from "../api";
-import type { EvaluationRunDetail, EvaluationRunSummary, GateOutcome } from "../types";
+import type { EvaluationRunDetail, EvaluationRunSummary } from "../types";
 
 function run(run_id: string, status: EvaluationRunSummary["status"]): EvaluationRunSummary {
   return {
@@ -20,23 +21,23 @@ function run(run_id: string, status: EvaluationRunSummary["status"]): Evaluation
   };
 }
 
-function detail(runId: string, status: EvaluationRunSummary["status"], outcome: GateOutcome = "PASSED"): EvaluationRunDetail {
+function detail(runId: string, status: EvaluationRunSummary["status"], passed = true): EvaluationRunDetail {
   return {
     summary: run(runId, status),
-    gate_result: { outcome, reasons: outcome === "FAILED" ? ["P0 failed"] : [] },
+    gate_result: { passed, reasons: passed ? [] : ["P0 failed"] },
     case_results: [
       {
         case_id: "single.collect.create",
         category: "数采管理",
         priority: "P0",
         case_type: "single",
-        passed: outcome === "PASSED",
-        failure_reasons: outcome === "FAILED" ? ["答案缺少关键步骤"] : [],
+        passed,
+        failure_reasons: passed ? [] : ["答案缺少关键步骤"],
         turn_results: [
           {
             question: "如何创建采集工程？",
             answer: "点击新建工程。",
-            passed: outcome === "PASSED",
+            passed,
             faithfulness_score: null,
             faithfulness_claims: [],
             metric_results: [],
@@ -117,7 +118,7 @@ describe("EvaluationCenter", () => {
   it("distinguishes invalid infrastructure results from failed quality gates", async () => {
     const client = createFakeClient();
     client.listEvaluationRuns = vi.fn().mockResolvedValue([run("run-invalid", "INVALID"), run("run-failed", "completed")]);
-    client.getRun = vi.fn((id: string) => Promise.resolve(id === "run-invalid" ? detail(id, "INVALID", "INVALID") : detail(id, "completed", "FAILED")));
+    client.getRun = vi.fn((id: string) => Promise.resolve(id === "run-invalid" ? detail(id, "INVALID") : detail(id, "completed", false)));
     const wrapper = mount(EvaluationCenter, { props: { client } });
     await settle();
 
@@ -129,7 +130,7 @@ describe("EvaluationCenter", () => {
 
   it("approves only a valid completed calibration run for the selected suite", async () => {
     const client = createFakeClient();
-    client.getRun = vi.fn().mockResolvedValue(detail("run-1", "INVALID", "INVALID"));
+    client.getRun = vi.fn().mockResolvedValue(detail("run-1", "INVALID"));
     const wrapper = mount(EvaluationCenter, { props: { client } });
     await settle();
 
@@ -162,5 +163,41 @@ describe("EvaluationCenter", () => {
     await vi.advanceTimersByTimeAsync(3000);
 
     expect(client.getRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("continues polling when cancellation remains running until the backend reports cancelled", async () => {
+    const client = createFakeClient();
+    const wrapper = mount(EvaluationCenter, { props: { client } });
+    await settle();
+    vi.useFakeTimers();
+    client.createRun = vi.fn().mockResolvedValue(run("run-2", "running"));
+    client.cancelRun = vi.fn().mockResolvedValue(run("run-2", "running"));
+    client.getRun = vi.fn()
+      .mockResolvedValueOnce(detail("run-2", "running"))
+      .mockResolvedValueOnce(detail("run-2", "cancelled"));
+
+    await wrapper.get('[data-testid="run-evaluation"]').trigger("click");
+    await settle();
+    await wrapper.get('[data-testid="abort-evaluation"]').trigger("click");
+    await settle();
+
+    expect(wrapper.find('[data-testid="abort-evaluation"]').exists()).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(client.getRun).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain("CANCELLED");
+  });
+});
+
+describe("EvaluationOverview gate semantics", () => {
+  it("renders a completed backend failed gate without calculating a new gate result", () => {
+    const wrapper = mount(EvaluationOverview, { props: { detail: detail("run-failed", "completed", false) } });
+
+    expect(wrapper.text()).toContain("质量未通过");
+  });
+
+  it("renders invalid semantics from the backend run status", () => {
+    const wrapper = mount(EvaluationOverview, { props: { detail: detail("run-invalid", "INVALID", true) } });
+
+    expect(wrapper.text()).toContain("无效");
   });
 });

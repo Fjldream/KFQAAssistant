@@ -129,8 +129,12 @@ async function abortEvaluation(): Promise<void> {
   try {
     const summary = await props.client.cancelRun(selectedRunId.value);
     stopPolling();
-    isRunning.value = false;
-    selectedDetail.value = { ...(selectedDetail.value ?? { gate_result: { outcome: "INVALID", reasons: [] }, case_results: [] }), summary };
+    selectedDetail.value = { ...(selectedDetail.value ?? { gate_result: { passed: false, reasons: [] }, case_results: [] }), summary };
+    isRunning.value = activeStatuses.has(summary.status);
+    if (isRunning.value) {
+      pollTimer = setTimeout(() => void pollRun(summary.run_id), 1000);
+      return;
+    }
     await refreshRuns();
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : "评测取消失败。"; }
 }

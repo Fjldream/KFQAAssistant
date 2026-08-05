@@ -61,7 +61,7 @@ export interface EvaluationRunSummary {
 }
 
 export interface GateResult {
-  outcome: GateOutcome;
+  passed: boolean;
   reasons: string[];
 }
 

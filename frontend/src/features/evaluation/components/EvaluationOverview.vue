@@ -35,12 +35,11 @@ const props = defineProps<{
 const summary = computed(() => props.detail?.summary ?? null);
 const avgFaithfulness = computed(() => summary.value?.avg_faithfulness_score ?? null);
 const outcomeLabel = computed(() => {
-  const outcome = props.detail?.gate_result.outcome;
-  if (outcome === "INVALID") return "无效";
-  if (outcome === "FAILED") return "质量未通过";
-  return outcome === "PASSED" ? "通过" : "未开始";
+  if (summary.value?.status === "INVALID") return "无效";
+  if (!props.detail) return "未开始";
+  return props.detail.gate_result.passed ? "通过" : "质量未通过";
 });
-const outcomeClass = computed(() => props.detail?.gate_result.outcome === "PASSED" ? "is-pass" : props.detail?.gate_result.outcome === "INVALID" ? "is-invalid" : "is-fail");
+const outcomeClass = computed(() => summary.value?.status === "INVALID" ? "is-invalid" : props.detail?.gate_result.passed ? "is-pass" : "is-fail");
 
 // 将小数通过率格式化成百分比文本。
 function formatPercent(value: number): string {
