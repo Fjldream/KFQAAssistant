@@ -169,3 +169,65 @@ def test_service_returns_overview_with_latest_run_and_comparison(tmp_path: Path)
     assert overview.comparison is not None
     assert overview.comparison.pass_rate_delta == 0
     assert overview.previous_run_id == first.summary.run_id
+
+
+# 验证 semantic_enabled=True 时 run_case 会启用 judge 计算 faithfulness，
+# 修复前端评测中心 progressive 路径从未产生忠实度值的问题。
+def test_service_run_case_computes_faithfulness_when_semantic_enabled(tmp_path, monkeypatch):
+    import app.evaluation.service as service_module
+    from app.evaluation.judge import JudgementError
+
+    cases_path = tmp_path / "cases.json"
+    dialogues_path = tmp_path / "dialogues.json"
+    _write_cases(cases_path)
+    service = EvaluationService(
+        repository=EvaluationRepository(tmp_path / "eval.db"),
+        chain_factory=FakeChain,
+        cases_path=cases_path,
+        dialogues_path=dialogues_path,
+        fail_under=0.8,
+        max_p95_ms=30000,
+        semantic_enabled=True,
+    )
+
+    class FakeJudge:
+        def complete_json(self, system_prompt, user_prompt):
+            if "拆" in system_prompt:
+                return {"claims": ["点击新建工程填写名称"]}
+            return {"supported": True, "evidence": "新建工程并填写名称。"}
+
+    monkeypatch.setattr(service_module, "create_judgement_client", lambda settings: FakeJudge())
+
+    result = service.run_case("single.collect.create", include_dialogues=False)
+
+    assert result is not None
+    turn = result.turn_results[0]
+    assert turn.faithfulness_score is not None
+    assert len(turn.faithfulness_claims) == 1
+
+
+# 验证默认（semantic_enabled=False）时 run_case 不产生 faithfulness，保持既有行为。
+def test_service_run_case_skips_judge_by_default(tmp_path, monkeypatch):
+    import app.evaluation.service as service_module
+
+    cases_path = tmp_path / "cases.json"
+    dialogues_path = tmp_path / "dialogues.json"
+    _write_cases(cases_path)
+    service = EvaluationService(
+        repository=EvaluationRepository(tmp_path / "eval.db"),
+        chain_factory=FakeChain,
+        cases_path=cases_path,
+        dialogues_path=dialogues_path,
+        fail_under=0.8,
+        max_p95_ms=30000,
+    )
+
+    def boom(*args, **kwargs):
+        raise AssertionError("semantic_enabled=False 时不应构造 judge")
+
+    monkeypatch.setattr(service_module, "create_judgement_client", boom)
+
+    result = service.run_case("single.collect.create", include_dialogues=False)
+
+    assert result is not None
+    assert result.turn_results[0].faithfulness_score is None

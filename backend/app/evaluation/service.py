@@ -4,6 +4,7 @@ from pathlib import Path
 from app.evaluation.case_loader import load_evaluation_cases
 from app.evaluation.comparison import compare_case_results
 from app.evaluation.evaluator import ChainProtocol, evaluate_case
+from app.evaluation.judge import create_judgement_client
 from app.evaluation.gates import evaluate_gates
 from app.evaluation.metrics import summarize_case_results
 from app.evaluation.models import (
@@ -29,6 +30,7 @@ class EvaluationService:
         dialogues_path: Path,
         fail_under: float,
         max_p95_ms: float | None,
+        semantic_enabled: bool = False,
     ) -> None:
         self.repository = repository
         self.chain_factory = chain_factory
@@ -36,6 +38,7 @@ class EvaluationService:
         self.dialogues_path = dialogues_path
         self.fail_under = fail_under
         self.max_p95_ms = max_p95_ms
+        self.semantic_enabled = semantic_enabled
 
     # 加载单轮和连续对话评测用例，按配置决定是否包含连续对话。
     def _load_cases(self, include_dialogues: bool = True) -> list[EvaluationCase]:
@@ -55,7 +58,11 @@ class EvaluationService:
         include_load_test: bool = False,
     ) -> EvaluationRunDetail:
         chain = self.chain_factory()
-        case_results = [evaluate_case(chain, case) for case in self._load_cases(include_dialogues=include_dialogues)]
+        judge = self._judge_or_none()
+        case_results = [
+            evaluate_case(chain, case, judge=judge, semantic_enabled=self.semantic_enabled)
+            for case in self._load_cases(include_dialogues=include_dialogues)
+        ]
         summary = summarize_case_results(case_results)
         gate_result = evaluate_gates(summary, fail_under=self.fail_under, max_p95_ms=self.max_p95_ms)
         self.repository.save_run(
@@ -69,6 +76,14 @@ class EvaluationService:
             raise RuntimeError("评测运行已保存，但无法读取详情。")
         return loaded
 
+    # 根据语义评估开关构造裁判客户端；关闭时返回 None（evaluate_case 会跳过语义评估）。
+    def _judge_or_none(self):
+        if not self.semantic_enabled:
+            return None
+        from app.core.config import get_settings
+
+        return create_judgement_client(get_settings())
+
     # 根据用例 ID 只执行一条评测用例，供前端逐条展示运行进度。
     def run_case(self, case_id: str, include_dialogues: bool = True) -> CaseResult | None:
         target_case = next(
@@ -77,7 +92,12 @@ class EvaluationService:
         )
         if target_case is None:
             return None
-        return evaluate_case(self.chain_factory(), target_case)
+        return evaluate_case(
+            self.chain_factory(),
+            target_case,
+            judge=self._judge_or_none(),
+            semantic_enabled=self.semantic_enabled,
+        )
 
     # 保存前端渐进式评测得到的用例结果，并生成完整运行报告。
     def save_case_results(self, case_results: list[CaseResult], config: dict | None = None) -> EvaluationRunDetail:
@@ -180,4 +200,5 @@ def create_evaluation_service() -> EvaluationService:
         dialogues_path=settings.evaluation_dialogues_path,
         fail_under=settings.evaluation_fail_under,
         max_p95_ms=settings.evaluation_max_p95_ms,
+        semantic_enabled=settings.evaluation_semantic_enabled,
     )
