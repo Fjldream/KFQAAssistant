@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -33,9 +35,21 @@ def _mount_manual_static_files(app: FastAPI) -> None:
 
 
 # 创建 FastAPI 应用并注册所有 API 路由，测试和生产启动都复用这一入口。
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    from app.evaluation.service import create_evaluation_service
+
+    service = create_evaluation_service()
+    app.state.evaluation_service = service
+    try:
+        yield
+    finally:
+        service.shutdown()
+
+
 def create_app() -> FastAPI:
     configure_logging()
-    app = FastAPI(title="KF RAG 问答助手", version="0.1.0")
+    app = FastAPI(title="KF RAG 问答助手", version="0.1.0", lifespan=_lifespan)
     _configure_cors(app)
     app.include_router(health_router)
     app.include_router(chat_router)

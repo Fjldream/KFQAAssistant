@@ -17,6 +17,7 @@ from app.evaluation.models import (
     TurnResult,
     can_transition,
 )
+from app.evaluation.metrics import summarize_case_results
 
 
 class EvaluationRepository:
@@ -388,6 +389,12 @@ class EvaluationRepository:
             ).fetchone()
         return str(row["run_id"]) if row is not None else None
 
+    def get_run_suite_id(self, run_id: str) -> str | None:
+        self.initialize()
+        with self._connect() as connection:
+            row = connection.execute("SELECT suite_id FROM evaluation_runs WHERE id = ?", (run_id,)).fetchone()
+        return str(row["suite_id"]) if row is not None and row["suite_id"] else None
+
     def _finish_run(
         self,
         run_id: str,
@@ -583,8 +590,22 @@ class EvaluationRepository:
                 return None
             case_rows = self._load_case_rows(connection, run_id)
             case_results = [self._load_case_result(connection, case_row) for case_row in case_rows]
+        stored_summary = self._row_to_summary(run, case_rows)
+        computed_summary = summarize_case_results(case_results)
+        summary = replace(
+            stored_summary,
+            completed_count=stored_summary.completed_case_count,
+            error_count=computed_summary.error_count,
+            judge_coverage=computed_summary.judge_coverage,
+            missing_judge_metrics=computed_summary.missing_judge_metrics,
+            avg_correctness_score=computed_summary.avg_correctness_score,
+            avg_fact_coverage_score=computed_summary.avg_fact_coverage_score,
+            avg_faithfulness_score=computed_summary.avg_faithfulness_score,
+            avg_retrieval_recall=computed_summary.avg_retrieval_recall,
+            avg_retrieval_mrr=computed_summary.avg_retrieval_mrr,
+        )
         return EvaluationRunDetail(
-            summary=self._row_to_summary(run, case_rows),
+            summary=summary,
             gate_result=GateResult(
                 passed=bool(run["gate_passed"]),
                 reasons=json.loads(run["gate_reasons_json"]),
@@ -642,6 +663,8 @@ class EvaluationRepository:
             category_pass_rates=dict(breakdowns["category_pass_rates"]),
             avg_faithfulness_score=row["avg_faithfulness_score"],
             knowledge_base_id=row["knowledge_base_id"],
+            completed_count=int(row["completed_case_count"] or 0),
+            error_count=int(row["error_count"] or 0),
         )
 
     # 从数据库读取一个用例结果，并附带其所有轮次结果。

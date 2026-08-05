@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from app.evaluation.repository import EvaluationRepository
+from app.evaluation.models import GateMode
 from app.evaluation.models import CaseResult, TurnResult
 from app.evaluation.service import EvaluationService
 from app.schemas.chat import ChatResponse, SourceSnippet
@@ -104,6 +105,38 @@ def test_service_runs_evaluation_and_saves_detail(tmp_path: Path):
     assert detail.gate_result.passed is True
     assert loaded is not None
     assert loaded.case_results[0].case_id == "single.collect.create"
+
+
+def test_service_create_run_uses_trusted_coordinator_not_client_case_results(tmp_path: Path):
+    class Coordinator:
+        def __init__(self):
+            self.calls = []
+
+        def start(self, suite_id, mode):
+            self.calls.append((suite_id, mode))
+            return "trusted-run"
+
+        def cancel(self, run_id):
+            return run_id == "trusted-run"
+
+    cases_path = tmp_path / "cases.json"
+    dialogues_path = tmp_path / "dialogues.json"
+    _write_cases(cases_path)
+    coordinator = Coordinator()
+    service = EvaluationService(
+        repository=EvaluationRepository(tmp_path / "eval.db"),
+        chain_factory=FakeChain,
+        cases_path=cases_path,
+        dialogues_path=dialogues_path,
+        fail_under=0.8,
+        max_p95_ms=30000,
+        evaluation_metrics="hit_at_k",
+        coordinator=coordinator,
+    )
+
+    assert service.create_run("legacy", GateMode.CALIBRATION) == "trusted-run"
+    assert coordinator.calls == [("legacy", GateMode.CALIBRATION)]
+    assert service.cancel_run("trusted-run") is True
 
 
 # 验证服务可以只运行一条用例，支持前端逐条展示进度。

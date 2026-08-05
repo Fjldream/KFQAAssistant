@@ -2,6 +2,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.evaluation.case_loader import load_evaluation_cases
+from app.evaluation.case_loader import load_evaluation_suite
 from app.evaluation.comparison import compare_case_results
 from app.evaluation.evaluator import ChainProtocol, evaluate_case
 from app.evaluation.judge import create_judgement_client
@@ -18,6 +19,10 @@ from app.evaluation.models import (
     TurnResult,
 )
 from app.evaluation.repository import EvaluationRepository
+from app.evaluation.coordinator import EvaluationCoordinator
+from app.evaluation.runner import EvaluationRunner
+from app.evaluation.models import GateMode
+from app.evaluation.snapshot import build_run_snapshot
 from app.rag.factory import create_rag_chain
 
 
@@ -33,6 +38,7 @@ class EvaluationService:
         max_p95_ms: float | None,
         semantic_enabled: bool = False,
         evaluation_metrics: str = "faithfulness",
+        coordinator: EvaluationCoordinator | None = None,
     ) -> None:
         self.repository = repository
         self.chain_factory = chain_factory
@@ -46,6 +52,47 @@ class EvaluationService:
             raise ValueError("至少配置一个评测指标")
         for name in self.metrics:
             get_metric(name)
+        self.coordinator = coordinator or EvaluationCoordinator(
+            runner=EvaluationRunner(repository, chain_factory, self._judge_or_none, self.metrics),
+            load_suite=self._load_suite,
+            create_run=self._create_trusted_run,
+            request_cancel=repository.request_cancel,
+        )
+
+    def _load_suite(self, suite_id: str):
+        for path in (self.cases_path, self.dialogues_path):
+            if path.exists():
+                suite = load_evaluation_suite(path)
+                if suite.id == suite_id:
+                    return suite
+        raise ValueError(f"unknown evaluation suite: {suite_id}")
+
+    def _create_trusted_run(self, suite, mode: GateMode) -> str:
+        from app.core.config import get_settings
+
+        snapshot = build_run_snapshot(get_settings(), suite).model_dump(mode="json")
+        return self.repository.create_run(
+            suite.id, suite.version, snapshot["suite_hash"], snapshot, mode.value, case_total=len(suite.cases)
+        )
+
+    def create_run(self, suite_id: str, mode: GateMode = GateMode.BLOCKING) -> str:
+        return self.coordinator.start(suite_id, mode)
+
+    def cancel_run(self, run_id: str) -> bool:
+        return self.coordinator.cancel(run_id)
+
+    def approve_baseline(self, run_id: str, approved_by: str | None = None) -> None:
+        self.repository.approve_baseline(run_id, approved_by)
+
+    def compare_to_baseline(self, run_id: str) -> ComparisonResult | None:
+        suite_id = self.repository.get_run_suite_id(run_id)
+        if suite_id is None:
+            return None
+        baseline_id = self.repository.get_current_baseline(suite_id)
+        return self.compare_run(run_id, baseline_id) if baseline_id else None
+
+    def shutdown(self) -> None:
+        self.coordinator.shutdown()
 
     # 加载单轮和连续对话评测用例，按配置决定是否包含连续对话。
     def _load_cases(self, include_dialogues: bool = True) -> list[EvaluationCase]:
@@ -64,6 +111,7 @@ class EvaluationService:
         include_dialogues: bool = True,
         include_load_test: bool = False,
     ) -> EvaluationRunDetail:
+        # Deprecated compatibility path. New runs must use create_run(), never client payload scores.
         chain = self.chain_factory()
         judge = self._judge_or_none()
         case_results = [
@@ -109,6 +157,7 @@ class EvaluationService:
 
     # 保存前端渐进式评测得到的用例结果，并生成完整运行报告。
     def save_case_results(self, case_results: list[CaseResult], config: dict | None = None) -> EvaluationRunDetail:
+        # Deprecated compatibility path retained for existing callers only.
         summary = summarize_case_results(case_results)
         gate_result = evaluate_gates(summary, fail_under=self.fail_under, max_p95_ms=self.max_p95_ms)
         self.repository.save_run(summary, case_results, gate_result, config=config or {})

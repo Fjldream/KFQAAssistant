@@ -27,7 +27,7 @@ class GateOutcome(str, Enum):
 ALLOWED_RUN_TRANSITIONS: Mapping[RunStatus, frozenset[RunStatus]] = MappingProxyType({
     RunStatus.CREATED: frozenset({RunStatus.RUNNING}),
     RunStatus.RUNNING: frozenset({RunStatus.SCORING, RunStatus.INVALID, RunStatus.CANCELLED}),
-    RunStatus.SCORING: frozenset({RunStatus.COMPLETED}),
+    RunStatus.SCORING: frozenset({RunStatus.COMPLETED, RunStatus.INVALID}),
     RunStatus.COMPLETED: frozenset(),
     RunStatus.INVALID: frozenset(),
     RunStatus.CANCELLED: frozenset(),
@@ -166,6 +166,10 @@ class EvaluationRunSummary:
     dialogue_p95_latency_ms: float = 0.0
     total_token_count: int = 0
     estimated_cost: float = 0.0
+
+    @property
+    def completed_case_count(self) -> int:
+        return self.completed_count
 
 
 # 表示一次评测运行是否满足上线质量门禁，以及不通过的具体原因。
