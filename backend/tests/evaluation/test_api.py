@@ -176,6 +176,15 @@ def test_cancel_run_returns_updated_summary(monkeypatch):
     assert response.json()["status"] == "cancelled"
 
 
+def test_run_detail_missing_run_returns_stable_error(monkeypatch):
+    client, _ = _client(monkeypatch)
+
+    response = client.get("/api/evaluation/runs/missing")
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "run_not_found"
+
+
 def test_cancel_terminal_run_returns_stable_error(monkeypatch):
     client, _ = _client(monkeypatch)
 

@@ -119,7 +119,7 @@ def evaluation_runs(limit: int = Query(default=20, ge=1, le=100)):
 def evaluation_run_detail(run_id: str):
     detail = create_evaluation_service().get_run(run_id)
     if detail is None:
-        raise HTTPException(status_code=404, detail="评测运行不存在")
+        _api_error(404, "run_not_found", "评测运行不存在")
     return detail
 
 

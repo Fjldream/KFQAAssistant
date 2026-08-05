@@ -214,6 +214,41 @@ def test_repository_persists_and_lists_approved_baseline_note(tmp_path: Path):
     assert baselines[0]["approved_at"]
 
 
+def test_repository_adds_note_to_existing_baselines_without_losing_approvals(tmp_path: Path):
+    db_path = tmp_path / "eval.db"
+    connection = sqlite3.connect(db_path)
+    connection.executescript("""
+        CREATE TABLE evaluation_runs (
+            id TEXT PRIMARY KEY, status TEXT NOT NULL, started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL, case_total INTEGER NOT NULL, case_passed INTEGER NOT NULL,
+            pass_rate REAL NOT NULL, p0_total INTEGER NOT NULL, p0_passed INTEGER NOT NULL,
+            avg_latency_ms REAL NOT NULL, p95_latency_ms REAL NOT NULL, gate_passed INTEGER NOT NULL,
+            gate_reasons_json TEXT NOT NULL, config_json TEXT NOT NULL, error TEXT
+        );
+        CREATE TABLE evaluation_baselines (
+            id TEXT PRIMARY KEY, suite_id TEXT NOT NULL, run_id TEXT NOT NULL UNIQUE,
+            approved_at TEXT NOT NULL, approved_by TEXT
+        );
+        INSERT INTO evaluation_runs VALUES ('legacy', 'completed', 'start', 'finish', 1, 1, 1, 1, 1, 1, 1, 1, '[]', '{}', NULL);
+        INSERT INTO evaluation_baselines VALUES ('baseline-legacy', 'core', 'legacy', 'approved', 'tester');
+    """)
+    connection.close()
+
+    repository = EvaluationRepository(db_path)
+    repository.initialize()
+
+    with repository._connect() as connection:
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(evaluation_baselines)")}
+    assert "note" in columns
+    assert repository.list_baselines()[0] == {
+        "suite_id": "core",
+        "run_id": "legacy",
+        "approved_at": "approved",
+        "approved_by": "tester",
+        "note": None,
+    }
+
+
 def test_repository_invalidates_orphaned_active_run_on_initialize(tmp_path: Path):
     repository = EvaluationRepository(tmp_path / "eval.db")
     repository.initialize()
