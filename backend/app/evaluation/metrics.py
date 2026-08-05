@@ -4,6 +4,13 @@ from uuid import uuid4
 from app.evaluation.models import CaseResult, EvaluationRunSummary, MetricStatus
 
 
+REQUIRED_JUDGE_METRICS = (
+    "answer_correctness",
+    "required_fact_coverage",
+    "faithfulness",
+)
+
+
 # 计算通过率，避免调用处重复处理空列表除零问题。
 def _pass_rate(passed: int, total: int) -> float:
     return passed / total if total else 0.0
@@ -80,12 +87,21 @@ def summarize_case_results(results: list[CaseResult]) -> EvaluationRunSummary:
         for turn in result.turn_results
         for metric in turn.metric_results
     ]
-    judge_metrics = [
-        metric for metric in metric_results
-        if metric.name in {"answer_correctness", "answer_relevance", "required_fact_coverage", "forbidden_fact_matches", "faithfulness"}
-        and metric.status != MetricStatus.SKIPPED
+    required_judge_results = [
+        (metric_name, next((
+            metric for metric in turn.metric_results
+            if metric.name == metric_name
+            and metric.status in {MetricStatus.PASSED, MetricStatus.FAILED}
+            and metric.score is not None
+        ), None))
+        for result in results
+        for turn in result.turn_results
+        for metric_name in REQUIRED_JUDGE_METRICS
     ]
-    judge_completed = sum(1 for metric in judge_metrics if metric.status in {MetricStatus.PASSED, MetricStatus.FAILED})
+    missing_judge_metrics = sorted({
+        metric_name for metric_name, metric in required_judge_results if metric is None
+    })
+    judge_completed = sum(1 for _, metric in required_judge_results if metric is not None)
 
     return EvaluationRunSummary(
         run_id=f"eval-{uuid4().hex}",
@@ -109,7 +125,8 @@ def summarize_case_results(results: list[CaseResult]) -> EvaluationRunSummary:
         ),
         completed_count=case_total,
         error_count=sum(1 for metric in metric_results if metric.status == MetricStatus.ERROR),
-        judge_coverage=judge_completed / len(judge_metrics) if judge_metrics else 0.0,
+        judge_coverage=judge_completed / len(required_judge_results) if required_judge_results else 0.0,
+        missing_judge_metrics=missing_judge_metrics,
         avg_correctness_score=_average_metric(results, "answer_correctness"),
         avg_fact_coverage_score=_average_metric(results, "required_fact_coverage"),
         avg_retrieval_recall=_average_metric(results, "recall_at_k"),

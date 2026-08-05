@@ -156,6 +156,7 @@ class EvaluationRunSummary:
     completed_count: int = 0
     error_count: int = 0
     judge_coverage: float = 0.0
+    missing_judge_metrics: list[str] = field(default_factory=list)
     avg_correctness_score: float | None = None
     avg_fact_coverage_score: float | None = None
     avg_retrieval_recall: float | None = None

@@ -110,3 +110,25 @@ def test_regression_gate_fails_when_p95_exceeds_relative_or_absolute_cap():
 
     assert decision.outcome == GateOutcome.FAILED
     assert "P95" in decision.regression_reasons[0]
+
+
+def test_regression_gate_fails_when_positive_p95_exceeds_zero_baseline_limit():
+    decision = evaluate_regression_gate(
+        _detail(_summary(p95_latency_ms=1), []),
+        _detail(_summary(p95_latency_ms=0), []),
+        GateThresholds(),
+    )
+
+    assert decision.outcome == GateOutcome.FAILED
+    assert "P95" in decision.regression_reasons[0]
+
+
+def test_regression_gate_invalidates_an_invalid_baseline():
+    decision = evaluate_regression_gate(
+        _detail(_summary(), []),
+        _detail(_summary(judge_coverage=0.0), []),
+        GateThresholds(),
+    )
+
+    assert decision.outcome == GateOutcome.INVALID
+    assert decision.validity_reasons

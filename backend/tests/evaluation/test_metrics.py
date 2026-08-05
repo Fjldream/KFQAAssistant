@@ -1,4 +1,6 @@
+from app.evaluation.gates import evaluate_run_validity
 from app.evaluation.metrics import summarize_case_results
+from app.evaluation.models import GateOutcome
 from app.evaluation.models import CaseResult, MetricResult, MetricStatus, TurnResult
 
 
@@ -123,3 +125,35 @@ def test_summarize_case_results_includes_gate_metrics_and_run_counts():
     assert summary.avg_retrieval_mrr == 0.6
     assert summary.single_p95_latency_ms == 200.0
     assert summary.dialogue_p95_latency_ms == 0.0
+
+
+def test_summarize_case_results_marks_missing_required_judge_dimensions_invalid():
+    result = _case("missing-judge-metrics", True)
+    result.turn_results[0].metric_results.append(
+        MetricResult("answer_correctness", 0.9, MetricStatus.PASSED)
+    )
+
+    summary = summarize_case_results([result])
+
+    assert summary.judge_coverage == 1 / 3
+    assert summary.missing_judge_metrics == ["faithfulness", "required_fact_coverage"]
+    assert evaluate_run_validity(summary).outcome == GateOutcome.INVALID
+
+
+def test_summarize_case_results_marks_scoreless_required_judge_metric_invalid():
+    result = _case("scoreless-judge-metric", True)
+    result.turn_results[0].metric_results.extend([
+        MetricResult("answer_correctness", 0.9, MetricStatus.PASSED),
+        MetricResult("required_fact_coverage", 0.9, MetricStatus.PASSED),
+        MetricResult("faithfulness", None, MetricStatus.PASSED),
+    ])
+
+    summary = summarize_case_results([result])
+
+    assert summary.judge_coverage == 2 / 3
+    assert summary.missing_judge_metrics == ["faithfulness"]
+    assert evaluate_run_validity(summary).outcome == GateOutcome.INVALID
+
+
+def test_summarize_empty_run_is_invalid():
+    assert evaluate_run_validity(summarize_case_results([])).outcome == GateOutcome.INVALID

@@ -36,6 +36,8 @@ def evaluate_run_validity(summary: EvaluationRunSummary) -> GateDecision:
         reasons.append("Judge 指标覆盖率为 0，无法验证质量")
     elif summary.judge_coverage < 1:
         reasons.append(f"Judge 指标覆盖不完整：{summary.judge_coverage:.2%}")
+    if summary.missing_judge_metrics:
+        reasons.append(f"缺少可用 Judge 指标：{', '.join(summary.missing_judge_metrics)}")
     if summary.status == RunStatus.INVALID or summary.status == RunStatus.INVALID.value:
         reasons.append("评测运行已标记为 INVALID")
     return GateDecision(
@@ -78,6 +80,12 @@ def evaluate_regression_gate(
     validity = evaluate_run_validity(current.summary)
     if validity.outcome == GateOutcome.INVALID:
         return validity
+    baseline_validity = evaluate_run_validity(baseline.summary)
+    if baseline_validity.outcome == GateOutcome.INVALID:
+        return GateDecision(
+            outcome=GateOutcome.INVALID,
+            validity_reasons=[f"批准基准无效：{reason}" for reason in baseline_validity.validity_reasons],
+        )
 
     comparison = compare_run_summaries(
         current.summary,
@@ -88,12 +96,11 @@ def evaluate_regression_gate(
     reasons = list(comparison.case_regression_reasons)
     if comparison.pass_rate_delta < -thresholds.max_pass_rate_drop:
         reasons.append(f"通过率下降 {-comparison.pass_rate_delta:.2%}，超过阈值 {thresholds.max_pass_rate_drop:.2%}")
-    if baseline.summary.p95_latency_ms > 0:
-        p95_limit = baseline.summary.p95_latency_ms * thresholds.max_p95_increase_ratio
-        if thresholds.max_p95_latency_ms is not None:
-            p95_limit = min(p95_limit, thresholds.max_p95_latency_ms)
-        if current.summary.p95_latency_ms > p95_limit:
-            reasons.append(f"P95 耗时 {current.summary.p95_latency_ms:.0f}ms 超过回归阈值 {p95_limit:.0f}ms")
+    p95_limit = baseline.summary.p95_latency_ms * thresholds.max_p95_increase_ratio
+    if thresholds.max_p95_latency_ms is not None:
+        p95_limit = min(p95_limit, thresholds.max_p95_latency_ms)
+    if current.summary.p95_latency_ms > p95_limit:
+        reasons.append(f"P95 耗时 {current.summary.p95_latency_ms:.0f}ms 超过回归阈值 {p95_limit:.0f}ms")
 
     return GateDecision(
         outcome=GateOutcome.FAILED if reasons and thresholds.mode == GateMode.BLOCKING else GateOutcome.PASSED,
