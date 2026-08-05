@@ -174,18 +174,22 @@ def evaluate_case(
         faithfulness_elapsed_ms = 0.0
         for metric_name in metrics:
             get_metric(metric_name)
-        requested = set(metrics)
-        if requested & RETRIEVAL_METRICS:
-            metric_results.extend(result for result in evaluate_retrieval(turn, response.sources) if result.name in requested)
-        if requested & {"answer_correctness", "answer_relevance", "required_fact_coverage", "forbidden_fact_matches"}:
+        requested = tuple(dict.fromkeys(metrics))
+        requested_names = set(requested)
+        if requested_names & RETRIEVAL_METRICS:
+            retrieval_results = {result.name: result for result in evaluate_retrieval(turn, response.sources)}
+            metric_results.extend(retrieval_results[name] for name in requested if name in retrieval_results)
+        semantic_metrics = {"answer_correctness", "answer_relevance", "required_fact_coverage", "forbidden_fact_matches"}
+        if requested_names & semantic_metrics:
             if judge is not None and semantic_enabled:
-                metric_results.extend(result for result in evaluate_answer_quality(judge, turn, response.answer) if result.name in requested)
+                answer_results = {result.name: result for result in evaluate_answer_quality(judge, turn, response.answer)}
+                metric_results.extend(answer_results[name] for name in requested if name in answer_results)
             else:
                 metric_results.extend(
                     MetricResult(name, None, MetricStatus.ERROR, error_code="judge_unavailable")
-                    for name in requested & {"answer_correctness", "answer_relevance", "required_fact_coverage", "forbidden_fact_matches"}
+                    for name in requested if name in semantic_metrics
                 )
-        if "faithfulness" in requested:
+        if "faithfulness" in requested_names:
             if judge is not None and semantic_enabled:
                 result = get_metric("faithfulness").evaluate(response.answer, [source.snippet for source in response.sources], judge)
                 metric_results.append(result)
@@ -194,6 +198,8 @@ def evaluate_case(
                 faithfulness_elapsed_ms = result.elapsed_ms
             else:
                 metric_results.append(MetricResult("faithfulness", None, MetricStatus.ERROR, error_code="judge_unavailable"))
+        metric_order = {name: index for index, name in enumerate(requested)}
+        metric_results.sort(key=lambda metric: metric_order[metric.name])
         metric_results = [_apply_priority_threshold(metric, case.priority) for metric in metric_results]
         turn_result = _evaluate_turn(
             turn,

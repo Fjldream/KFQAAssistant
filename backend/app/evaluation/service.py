@@ -37,7 +37,8 @@ class EvaluationService:
         fail_under: float,
         max_p95_ms: float | None,
         semantic_enabled: bool = False,
-        evaluation_metrics: str = "answer_correctness,required_fact_coverage,faithfulness",
+        evaluation_metrics: str = "answer_correctness,required_fact_coverage,faithfulness,hit_at_k,recall_at_k,mrr,chunk_hit_at_k,forbidden_source_matches",
+        price_rates: dict[str, str] | None = None,
         coordinator: EvaluationCoordinator | None = None,
     ) -> None:
         self.repository = repository
@@ -58,6 +59,7 @@ class EvaluationService:
                 chain_factory,
                 self._judge_or_none,
                 self.metrics,
+                price_rates=price_rates,
                 max_p95_ms=max_p95_ms,
             ),
             load_suite=self._load_suite,
@@ -104,15 +106,19 @@ class EvaluationService:
         return self.repository.list_baselines()
 
     def compare_to_baseline(self, run_id: str, baseline_run_id: str | None = None) -> ComparisonResult | None:
-        suite_id = self.repository.get_run_suite_id(run_id)
-        if suite_id is None:
+        metadata = self.repository.get_run_metadata(run_id)
+        if metadata is None or not metadata["suite_id"]:
             raise LookupError("run_not_found")
+        suite_id = str(metadata["suite_id"])
         baseline_id = baseline_run_id or self.repository.get_current_baseline(suite_id)
         if baseline_id is not None:
-            baseline_suite_id = self.repository.get_run_suite_id(baseline_id)
-            if baseline_suite_id is None:
+            baseline_metadata = self.repository.get_run_metadata(baseline_id)
+            if baseline_metadata is None:
                 raise LookupError("run_not_found")
-            if baseline_suite_id != suite_id:
+            if any(
+                baseline_metadata[field] != metadata[field]
+                for field in ("suite_id", "suite_version", "suite_hash")
+            ):
                 raise ValueError("suite_mismatch")
         return self.compare_run(run_id, baseline_id) if baseline_id else None
 
@@ -284,4 +290,5 @@ def create_evaluation_service() -> EvaluationService:
         max_p95_ms=settings.evaluation_max_p95_ms,
         semantic_enabled=settings.evaluation_semantic_enabled,
         evaluation_metrics=settings.evaluation_metrics,
+        price_rates=settings.evaluation_price_rates,
     )

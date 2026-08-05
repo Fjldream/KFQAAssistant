@@ -70,6 +70,10 @@ class EvaluationRunSummaryResponse(BaseModel):
     dialogue_p95_latency_ms: float = 0.0
     total_token_count: int = 0
     estimated_cost: float = 0.0
+    suite_id: str | None = None
+    suite_version: str | None = None
+    suite_hash: str | None = None
+    mode: EvaluationRunMode | None = None
 
 
 class BaselineApprovalResponse(BaseModel):

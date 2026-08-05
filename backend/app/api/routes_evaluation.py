@@ -1,6 +1,6 @@
 from typing import NoReturn
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.api.dependencies import verify_api_key
 from app.evaluation.coordinator import EvaluationRunConflict
@@ -12,10 +12,14 @@ from app.evaluation.schemas import (
     EvaluationRunSummaryResponse,
     RunEvaluationCaseRequest,
 )
-from app.evaluation.service import create_evaluation_service
+from app.evaluation.service import EvaluationService
 from app.rag.errors import RagServiceError
 
 router = APIRouter(prefix="/api/evaluation", tags=["evaluation"], dependencies=[Depends(verify_api_key)])
+
+
+def get_evaluation_service(request: Request) -> EvaluationService:
+    return request.app.state.evaluation_service
 
 
 def _api_error(status_code: int, code: str, message: str) -> NoReturn:
@@ -61,20 +65,19 @@ def _case_to_response(case: EvaluationCase) -> dict:
 
 # 获取评测中心总览，包含最近一次运行、上一轮运行和对比摘要。
 @router.get("/overview")
-def evaluation_overview():
-    return create_evaluation_service().get_overview()
+def evaluation_overview(service: EvaluationService = Depends(get_evaluation_service)):
+    return service.get_overview()
 
 
 # 获取当前评测用例列表，前端 v1 只读展示。
 @router.get("/cases")
-def evaluation_cases():
-    return [_case_to_response(case) for case in create_evaluation_service().list_cases()]
+def evaluation_cases(service: EvaluationService = Depends(get_evaluation_service)):
+    return [_case_to_response(case) for case in service.list_cases()]
 
 
 # 创建由后端执行的异步评测运行，只返回可轮询的运行汇总。
 @router.post("/runs", response_model=EvaluationRunSummaryResponse, status_code=status.HTTP_202_ACCEPTED)
-def create_evaluation_run(request: CreateEvaluationRunRequest):
-    service = create_evaluation_service()
+def create_evaluation_run(request: CreateEvaluationRunRequest, service: EvaluationService = Depends(get_evaluation_service)):
     try:
         run_id = service.create_run(request.suite_id, GateMode(request.mode.value.upper()))
     except EvaluationRunConflict as exc:
@@ -89,9 +92,9 @@ def create_evaluation_run(request: CreateEvaluationRunRequest):
 
 # 运行单条评测用例，前端用它逐条展示进度。
 @router.post("/cases/{case_id}/run")
-def run_evaluation_case(case_id: str, request: RunEvaluationCaseRequest):
+def run_evaluation_case(case_id: str, request: RunEvaluationCaseRequest, service: EvaluationService = Depends(get_evaluation_service)):
     try:
-        result = create_evaluation_service().run_case(
+        result = service.run_case(
             case_id=case_id,
             include_dialogues=request.include_dialogues,
         )
@@ -110,14 +113,14 @@ def save_progressive_evaluation_run():
 
 # 获取最近评测运行列表。
 @router.get("/runs")
-def evaluation_runs(limit: int = Query(default=20, ge=1, le=100)):
-    return create_evaluation_service().list_runs(limit=limit)
+def evaluation_runs(limit: int = Query(default=20, ge=1, le=100), service: EvaluationService = Depends(get_evaluation_service)):
+    return service.list_runs(limit=limit)
 
 
 # 获取某次评测运行的完整详情。
 @router.get("/runs/{run_id}")
-def evaluation_run_detail(run_id: str):
-    detail = create_evaluation_service().get_run(run_id)
+def evaluation_run_detail(run_id: str, service: EvaluationService = Depends(get_evaluation_service)):
+    detail = service.get_run(run_id)
     if detail is None:
         _api_error(404, "run_not_found", "评测运行不存在")
     return detail
@@ -125,8 +128,7 @@ def evaluation_run_detail(run_id: str):
 
 # 取消仍在运行的评测，并返回持久化的最新摘要。
 @router.post("/runs/{run_id}/cancel", response_model=EvaluationRunSummaryResponse)
-def cancel_evaluation_run(run_id: str):
-    service = create_evaluation_service()
+def cancel_evaluation_run(run_id: str, service: EvaluationService = Depends(get_evaluation_service)):
     detail = service.get_run(run_id)
     if detail is None:
         _api_error(404, "run_not_found", "评测运行不存在")
@@ -141,23 +143,23 @@ def cancel_evaluation_run(run_id: str):
 
 
 @router.post("/runs/{run_id}/approve-baseline", response_model=BaselineApprovalResponse)
-def approve_evaluation_baseline(run_id: str, request: ApproveBaselineRequest):
+def approve_evaluation_baseline(run_id: str, request: ApproveBaselineRequest, service: EvaluationService = Depends(get_evaluation_service)):
     try:
-        return create_evaluation_service().approve_baseline(run_id, request.approved_by, request.note)
+        return service.approve_baseline(run_id, request.approved_by, request.note)
     except (LookupError, RuntimeError, ValueError) as exc:
         _raise_service_error(exc)
 
 
 @router.get("/baselines", response_model=list[BaselineApprovalResponse])
-def evaluation_baselines():
-    return create_evaluation_service().list_baselines()
+def evaluation_baselines(service: EvaluationService = Depends(get_evaluation_service)):
+    return service.list_baselines()
 
 
 # 获取某次评测运行相对同 Suite 已批准基准的对比结果。
 @router.get("/runs/{run_id}/compare")
-def evaluation_run_comparison(run_id: str, baseline_run_id: str | None = None):
+def evaluation_run_comparison(run_id: str, baseline_run_id: str | None = None, service: EvaluationService = Depends(get_evaluation_service)):
     try:
-        comparison = create_evaluation_service().compare_to_baseline(run_id, baseline_run_id)
+        comparison = service.compare_to_baseline(run_id, baseline_run_id)
     except (LookupError, ValueError) as exc:
         _raise_service_error(exc)
     if comparison is None:

@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     deepseek_judge_model: str = "deepseek-v4-flash"
     deepseek_judge_timeout_seconds: int = 60
     evaluation_semantic_enabled: bool = True
-    evaluation_metrics: str = "answer_correctness,required_fact_coverage,faithfulness"
+    evaluation_metrics: str = "answer_correctness,required_fact_coverage,faithfulness,hit_at_k,recall_at_k,mrr,chunk_hit_at_k,forbidden_source_matches"
 
     embedding_model_name: str = "BAAI/bge-small-zh-v1.5"
     chroma_persist_dir: Path = Path("storage/chroma")
@@ -58,8 +58,19 @@ class Settings(BaseSettings):
     evaluation_db_path: Path = Path("storage/evaluation/kingiask_eval.db")
     evaluation_cases_path: Path = Path("backend/evaluation_cases/core.v1.json")
     evaluation_dialogues_path: Path = Path("backend/evaluation_cases/eval_dialogues.json")
-    evaluation_fail_under: float = 0.8
+    evaluation_fail_under: float = 0.85
     evaluation_max_p95_ms: float = 30000
+    evaluation_price_input_cache_hit_per_million: str = "0"
+    evaluation_price_input_cache_miss_per_million: str = "0"
+    evaluation_price_output_per_million: str = "0"
+
+    @property
+    def evaluation_price_rates(self) -> dict[str, str]:
+        return {
+            "input_cache_hit_per_million": self.evaluation_price_input_cache_hit_per_million,
+            "input_cache_miss_per_million": self.evaluation_price_input_cache_miss_per_million,
+            "output_per_million": self.evaluation_price_output_per_million,
+        }
 
     # 统一规范化运行数据路径，让本地、测试和容器入口共享同一套解析规则。
     @field_validator(

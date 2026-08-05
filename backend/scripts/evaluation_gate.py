@@ -47,6 +47,7 @@ def build_gate_dependencies(suite_id: str) -> GateDependencies:
         chain_factory=create_rag_chain,
         judge_factory=lambda: create_judgement_client(settings) if settings.evaluation_semantic_enabled else None,
         metric_names=tuple(name.strip() for name in settings.evaluation_metrics.split(",") if name.strip()),
+        price_rates=settings.evaluation_price_rates,
         max_p95_ms=settings.evaluation_max_p95_ms,
     )
     return GateDependencies(
@@ -182,7 +183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         detail = dependencies.runner.run(run_id, dependencies.suite, mode, Event())
         thresholds = GateThresholds(
             mode=mode,
-            min_pass_rate=dependencies.suite.default_thresholds.answer_correctness,
+            min_pass_rate=0.85,
             min_avg_correctness_score=dependencies.suite.default_thresholds.answer_correctness,
             min_avg_fact_coverage_score=dependencies.suite.default_thresholds.p1_required_fact_coverage,
             min_avg_faithfulness_score=dependencies.suite.default_thresholds.faithfulness,

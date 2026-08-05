@@ -166,6 +166,10 @@ class EvaluationRunSummary:
     dialogue_p95_latency_ms: float = 0.0
     total_token_count: int = 0
     estimated_cost: float = 0.0
+    suite_id: str | None = None
+    suite_version: str | None = None
+    suite_hash: str | None = None
+    mode: str | None = None
 
     @property
     def completed_case_count(self) -> int:
@@ -206,6 +210,7 @@ class EvaluationRunDetail:
     summary: EvaluationRunSummary
     gate_result: GateResult
     case_results: list[CaseResult] = field(default_factory=list)
+    snapshot: dict[str, Any] | None = None
 
 
 # 表示评测中心首页需要展示的最近运行、上一轮和对比信息。

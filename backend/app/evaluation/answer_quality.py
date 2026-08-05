@@ -2,6 +2,7 @@ from time import perf_counter
 
 from app.evaluation.judge import JudgementCompletion, JudgementError, JudgeProtocol
 from app.evaluation.models import MetricResult, MetricStatus
+from app.observability.model_usage import model_usage_to_dict
 from app.rag.generation.answer_policy import is_no_answer
 
 
@@ -38,7 +39,7 @@ def evaluate_answer_quality(judge: JudgeProtocol, turn, answer: str) -> list[Met
         return _error_results("judge_http_error", (perf_counter() - started) * 1000)
     data = completion.data if isinstance(completion, JudgementCompletion) else completion
     elapsed_ms = (perf_counter() - started) * 1000
-    usage = completion.usage if isinstance(completion, JudgementCompletion) else None
+    usage = model_usage_to_dict(completion.usage) if isinstance(completion, JudgementCompletion) else None
     if not isinstance(data, dict):
         return _error_results("judge_invalid_json", elapsed_ms)
     try:

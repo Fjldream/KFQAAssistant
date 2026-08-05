@@ -91,4 +91,5 @@ def build_run_snapshot(settings: Settings, suite: EvaluationSuite) -> RunSnapsho
         chunk_overlap=settings.chunk_overlap,
         top_k=settings.top_k,
         runtime_versions=_runtime_versions(),
+        price_rates=settings.evaluation_price_rates,
     )

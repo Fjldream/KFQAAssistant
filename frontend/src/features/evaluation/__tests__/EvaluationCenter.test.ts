@@ -99,6 +99,25 @@ describe("EvaluationCenter", () => {
     expect(wrapper.text()).toContain("未评估");
   });
 
+  it("allows blocking mode only when the selected suite has an approved baseline", async () => {
+    const noBaselineClient = createFakeClient();
+    noBaselineClient.listBaselines = vi.fn().mockResolvedValue([]);
+    const noBaselineWrapper = mount(EvaluationCenter, { props: { client: noBaselineClient } });
+    await settle();
+
+    await noBaselineWrapper.get('[data-testid="mode-blocking"]').trigger("click");
+    expect(noBaselineWrapper.get('[data-testid="run-evaluation"]').attributes("disabled")).toBeDefined();
+
+    const client = createFakeClient();
+    const wrapper = mount(EvaluationCenter, { props: { client } });
+    await settle();
+    await wrapper.get('[data-testid="mode-blocking"]').trigger("click");
+    expect(wrapper.get('[data-testid="run-evaluation"]').attributes("disabled")).toBeUndefined();
+
+    await wrapper.get('[data-testid="run-evaluation"]').trigger("click");
+    expect(client.createRun).toHaveBeenCalledWith({ suite_id: "core", mode: "blocking" });
+  });
+
   it("cancels an active backend run", async () => {
     const client = createFakeClient();
     const wrapper = mount(EvaluationCenter, { props: { client } });

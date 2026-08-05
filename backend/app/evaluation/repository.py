@@ -463,12 +463,14 @@ class EvaluationRepository:
         self.initialize()
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT suite_id, mode, status, gate_passed FROM evaluation_runs WHERE id = ?", (run_id,)
+                "SELECT suite_id, suite_version, suite_hash, mode, status, gate_passed FROM evaluation_runs WHERE id = ?", (run_id,)
             ).fetchone()
         if row is None:
             return None
         return {
             "suite_id": row["suite_id"],
+            "suite_version": row["suite_version"],
+            "suite_hash": row["suite_hash"],
             "mode": row["mode"],
             "status": row["status"],
             "gate_passed": row["gate_passed"],
@@ -691,6 +693,7 @@ class EvaluationRepository:
                 reasons=json.loads(run["gate_reasons_json"]),
             ),
             case_results=case_results,
+            snapshot=json.loads(run["config_json"]) if run["config_json"] else None,
         )
 
     # 查询指定运行之前最近一次已完成运行，用于默认历史对比。
@@ -751,6 +754,10 @@ class EvaluationRepository:
                 + int(row["output_tokens"] or 0)
             ),
             estimated_cost=float(row["estimated_cost"] or 0),
+            suite_id=row["suite_id"],
+            suite_version=row["suite_version"],
+            suite_hash=row["suite_hash"],
+            mode=str(row["mode"]).lower() if row["mode"] else None,
         )
 
     # 从数据库读取一个用例结果，并附带其所有轮次结果。

@@ -55,7 +55,7 @@ Blocking mode requires an approved baseline. Its exit codes are:
 
 For the `core` Suite, absolute blocking checks require:
 
-- Pass rate at least `80%`.
+- Pass rate at least `85%`.
 - Every P0 Case passes.
 - Average answer-correctness score at least `80%`.
 - Average required-fact coverage at least `80%`.

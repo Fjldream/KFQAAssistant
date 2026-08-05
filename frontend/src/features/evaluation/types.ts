@@ -57,6 +57,8 @@ export interface EvaluationRunSummary {
   total_token_count?: number;
   estimated_cost?: number;
   suite_id?: string;
+  suite_version?: string;
+  suite_hash?: string;
   mode?: GateMode;
 }
 

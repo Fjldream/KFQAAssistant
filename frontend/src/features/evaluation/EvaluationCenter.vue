@@ -3,7 +3,11 @@
     <header class="ke-header">
       <div><p>KingIAsk Quality</p><h1>评测中心</h1></div>
       <div class="ke-actions">
-        <button v-if="!isRunning" class="ke-run" type="button" data-testid="run-evaluation" @click="runEvaluation"><Play :size="16" aria-hidden="true" />运行评测</button>
+        <div v-if="!isRunning" class="ke-mode" role="group" aria-label="运行模式">
+          <button type="button" data-testid="mode-calibration" :class="{ 'is-active': mode === 'calibration' }" @click="mode = 'calibration'">校准</button>
+          <button type="button" data-testid="mode-blocking" :class="{ 'is-active': mode === 'blocking' }" @click="mode = 'blocking'">阻断</button>
+        </div>
+        <button v-if="!isRunning" class="ke-run" type="button" data-testid="run-evaluation" :disabled="mode === 'blocking' && !selectedBaseline" @click="runEvaluation"><Play :size="16" aria-hidden="true" />运行评测</button>
         <button v-else class="ke-run ke-run--danger" type="button" data-testid="abort-evaluation" @click="abortEvaluation"><Square :size="16" aria-hidden="true" />中止评测</button>
         <button class="ke-run ke-run--secondary" type="button" data-testid="approve-baseline" :disabled="!canApproveBaseline" @click="approvalOpen = true">批准基准</button>
       </div>
@@ -43,7 +47,7 @@ import EvaluationOverview from "./components/EvaluationOverview.vue";
 import EvaluationRunDetail from "./components/EvaluationRunDetail.vue";
 import EvaluationRunsTable from "./components/EvaluationRunsTable.vue";
 import type { EvaluationApiClient } from "./api";
-import type { BaselineApproval, ComparisonResult, EvaluationCase, EvaluationRunDetail as Detail, EvaluationRunSummary } from "./types";
+import type { BaselineApproval, ComparisonResult, EvaluationCase, EvaluationRunDetail as Detail, EvaluationRunSummary, GateMode } from "./types";
 
 const props = defineProps<{ client: EvaluationApiClient }>();
 const cases = ref<EvaluationCase[]>([]);
@@ -54,6 +58,7 @@ const selectedDetail = ref<Detail | null>(null);
 const comparison = ref<ComparisonResult | null>(null);
 const errorMessage = ref("");
 const isRunning = ref(false);
+const mode = ref<GateMode>("calibration");
 const approvalOpen = ref(false);
 const approverName = ref("");
 const approvalNote = ref("");
@@ -116,8 +121,9 @@ async function loadEvaluationCenter(): Promise<void> {
 async function runEvaluation(): Promise<void> {
   try {
     errorMessage.value = "";
-    const summary = await props.client.createRun({ suite_id: "core", mode: "calibration" });
-    createdRunMetadata.set(summary.run_id, { suite_id: "core", mode: "calibration" });
+    if (mode.value === "blocking" && !selectedBaseline.value) return;
+    const summary = await props.client.createRun({ suite_id: "core", mode: mode.value });
+    createdRunMetadata.set(summary.run_id, { suite_id: "core", mode: mode.value });
     selectedRunId.value = summary.run_id;
     isRunning.value = activeStatuses.has(summary.status);
     await pollRun(summary.run_id);
@@ -165,7 +171,7 @@ onBeforeUnmount(() => { disposed = true; stopPolling(); });
 .ke-center { display: flex; height: 100%; min-height: 0; flex-direction: column; gap: 16px; padding: 72px 28px 24px; overflow: hidden; }
 .ke-header,.ke-overview,.ke-compare,.ke-layout { width: min(1180px, 100%); margin: 0 auto; }
 .ke-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }.ke-header p,.ke-header h1 { margin: 0; }.ke-header p { color: var(--ka-text-tertiary); font-size: 12px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; }.ke-header h1 { font-size: 28px; line-height: 1.15; }.ke-actions { display:flex; gap:8px; }
-.ke-run { display:inline-flex; height:38px; align-items:center; gap:8px; border-radius:8px; background:var(--ka-accent); color:var(--ka-on-accent); font-weight:700; padding:0 14px; }.ke-run:disabled { cursor:not-allowed; opacity:.45; }.ke-run--danger { background:var(--ka-red); }.ke-run--secondary { background:var(--ka-surface-muted); color:var(--ka-text-secondary); }
+.ke-run { display:inline-flex; height:38px; align-items:center; gap:8px; border-radius:8px; background:var(--ka-accent); color:var(--ka-on-accent); font-weight:700; padding:0 14px; }.ke-run:disabled { cursor:not-allowed; opacity:.45; }.ke-run--danger { background:var(--ka-red); }.ke-run--secondary { background:var(--ka-surface-muted); color:var(--ka-text-secondary); }.ke-mode { display:flex; height:38px; overflow:hidden; border:1px solid var(--ka-border); border-radius:8px; }.ke-mode button { min-width:48px; background:var(--ka-surface); color:var(--ka-text-secondary); font-size:12px; font-weight:700; }.ke-mode button + button { border-left:1px solid var(--ka-border); }.ke-mode button.is-active { background:var(--ka-surface-muted); color:var(--ka-text); }
 .ke-error,.ke-status { width:min(1180px, 100%); margin:0 auto; border-radius:8px; padding:10px 12px; }.ke-error { background:var(--ka-red-soft); color:var(--ka-red); }.ke-status { background:var(--ka-accent-soft); color:var(--ka-accent-strong); }
 .ke-layout { display:grid; min-height:0; flex:1; grid-template-columns:420px minmax(0,1fr); gap:14px; }.ke-stack { display:grid; min-height:0; grid-template-rows:minmax(0,1fr) minmax(0,.8fr); gap:14px; }
 :deep(.ke-overview) { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }:deep(.ke-compare) { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }:deep(.ke-metric),:deep(.ke-gate),:deep(.ke-compare > div),:deep(.ke-panel),:deep(.ke-detail) { border:1px solid var(--ka-border); border-radius:8px; background:var(--ka-surface-elevated); box-shadow:var(--ka-shadow-soft); }:deep(.ke-metric),:deep(.ke-gate),:deep(.ke-compare > div) { display:flex; min-height:78px; flex-direction:column; justify-content:center; gap:4px; padding:12px; }:deep(.ke-metric span),:deep(.ke-gate span),:deep(.ke-compare span) { color:var(--ka-text-tertiary); font-size:12px; }:deep(.ke-metric strong),:deep(.ke-gate strong),:deep(.ke-compare strong) { font-size:22px; }:deep(.is-pass) { color:var(--ka-green); }:deep(.is-fail),:deep(.is-invalid) { color:var(--ka-red); }

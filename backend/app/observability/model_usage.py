@@ -21,6 +21,18 @@ class ModelUsageCollector:
     events: list[ModelUsageEvent] = field(default_factory=list)
 
 
+def model_usage_to_dict(usage: ModelUsageEvent | None) -> dict[str, int | str] | None:
+    if usage is None:
+        return None
+    return {
+        "operation": usage.operation,
+        "model": usage.model,
+        "prompt_tokens": usage.prompt_tokens,
+        "completion_tokens": usage.completion_tokens,
+        "cache_hit_tokens": usage.cache_hit_tokens,
+    }
+
+
 _collector: ContextVar[ModelUsageCollector | None] = ContextVar("model_usage_collector", default=None)
 
 

@@ -155,5 +155,20 @@ def test_summarize_case_results_marks_scoreless_required_judge_metric_invalid():
     assert evaluate_run_validity(summary).outcome == GateOutcome.INVALID
 
 
+def test_summarize_case_results_treats_valid_refusal_judge_skips_as_covered():
+    result = _case("intentional-refusal", True)
+    result.turn_results[0].metric_results.extend([
+        MetricResult("answer_correctness", None, MetricStatus.SKIPPED),
+        MetricResult("required_fact_coverage", None, MetricStatus.SKIPPED),
+        MetricResult("faithfulness", None, MetricStatus.SKIPPED),
+    ])
+
+    summary = summarize_case_results([result])
+
+    assert summary.judge_coverage == 1.0
+    assert summary.missing_judge_metrics == []
+    assert evaluate_run_validity(summary).outcome == GateOutcome.PASSED
+
+
 def test_summarize_empty_run_is_invalid():
     assert evaluate_run_validity(summarize_case_results([])).outcome == GateOutcome.INVALID

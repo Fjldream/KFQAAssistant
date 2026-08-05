@@ -127,7 +127,7 @@ class EvaluationRunner:
         validity = evaluate_run_validity(summary)
         thresholds = GateThresholds(
             mode=mode,
-            min_pass_rate=suite.default_thresholds.answer_correctness,
+            min_pass_rate=0.85,
             min_avg_correctness_score=suite.default_thresholds.answer_correctness,
             min_avg_fact_coverage_score=suite.default_thresholds.p1_required_fact_coverage,
             min_avg_faithfulness_score=suite.default_thresholds.faithfulness,
@@ -141,12 +141,21 @@ class EvaluationRunner:
         if baseline_id is not None:
             baseline = self.repository.get_run(baseline_id)
             if baseline is not None:
-                regression = evaluate_regression_gate(detail, baseline, thresholds)
-                reasons.extend(regression.validity_reasons)
-                reasons.extend(regression.regression_reasons)
-                decision = regression if regression.outcome == GateOutcome.INVALID else decision
-                if regression.outcome == GateOutcome.FAILED:
-                    decision = regression
+                baseline_metadata = self.repository.get_run_metadata(baseline_id)
+                current_metadata = self.repository.get_run_metadata(run_id)
+                if baseline_metadata is None or current_metadata is None or any(
+                    baseline_metadata[field] != current_metadata[field]
+                    for field in ("suite_id", "suite_version", "suite_hash")
+                ):
+                    reasons.append("批准基准 Suite 版本或内容哈希不匹配")
+                    decision = GateDecision(GateOutcome.INVALID, validity_reasons=[reasons[-1]])
+                else:
+                    regression = evaluate_regression_gate(detail, baseline, thresholds)
+                    reasons.extend(regression.validity_reasons)
+                    reasons.extend(regression.regression_reasons)
+                    decision = regression if regression.outcome == GateOutcome.INVALID else decision
+                    if regression.outcome == GateOutcome.FAILED:
+                        decision = regression
 
         gate = GateResult(
             passed=decision.outcome == GateOutcome.PASSED and validity.outcome != GateOutcome.INVALID,
@@ -167,7 +176,7 @@ class EvaluationRunner:
                 token_totals=token_totals,
                 estimated_cost=str(cost),
             )
-            return EvaluationRunDetail(replace(summary, status=RunStatus.INVALID), gate, case_results)
+            return self.repository.get_run(run_id) or EvaluationRunDetail(replace(summary, status=RunStatus.INVALID), gate, case_results)
 
         self.repository.finish_run(
             run_id,
@@ -176,7 +185,7 @@ class EvaluationRunner:
             token_totals=token_totals,
             estimated_cost=str(cost),
         )
-        return EvaluationRunDetail(replace(summary, status=RunStatus.COMPLETED), gate, case_results)
+        return self.repository.get_run(run_id) or EvaluationRunDetail(replace(summary, status=RunStatus.COMPLETED), gate, case_results)
 
     def _attach_usage(self, result: CaseResult, events: list[ModelUsageEvent]) -> CaseResult:
         payload = {

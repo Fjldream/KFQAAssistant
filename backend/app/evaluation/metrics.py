@@ -91,8 +91,10 @@ def summarize_case_results(results: list[CaseResult]) -> EvaluationRunSummary:
         (metric_name, next((
             metric for metric in turn.metric_results
             if metric.name == metric_name
-            and metric.status in {MetricStatus.PASSED, MetricStatus.FAILED}
-            and metric.score is not None
+            and (
+                (metric.status in {MetricStatus.PASSED, MetricStatus.FAILED} and metric.score is not None)
+                or (turn.no_answer_passed and metric.status == MetricStatus.SKIPPED)
+            )
         ), None))
         for result in results
         for turn in result.turn_results

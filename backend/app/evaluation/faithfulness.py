@@ -4,6 +4,7 @@ from time import perf_counter
 
 from app.evaluation.judge import JudgementCompletion, JudgementError, JudgeProtocol
 from app.evaluation.models import MetricStatus
+from app.observability.model_usage import model_usage_to_dict
 from app.rag.generation.answer_policy import is_no_answer
 
 
@@ -99,4 +100,9 @@ def compute_faithfulness(judge: JudgeProtocol, answer: str, contexts: list[str])
     if not claims_payload:
         return FaithfulnessResult(score=None, claims=[], elapsed_ms=elapsed(), status=MetricStatus.ERROR, error_code="judge_schema_error")
     supported = sum(1 for item in claims_payload if item["supported"])
-    return FaithfulnessResult(score=supported / len(claims_payload), claims=claims_payload, elapsed_ms=elapsed(), token_usage=completion.usage if isinstance(completion, JudgementCompletion) else None)
+    return FaithfulnessResult(
+        score=supported / len(claims_payload),
+        claims=claims_payload,
+        elapsed_ms=elapsed(),
+        token_usage=model_usage_to_dict(completion.usage) if isinstance(completion, JudgementCompletion) else None,
+    )

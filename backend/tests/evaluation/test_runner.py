@@ -5,9 +5,10 @@ from threading import Event
 import pytest
 
 from app.evaluation.models import GateMode, MetricStatus, RunStatus
+from app.evaluation.judge import JudgementCompletion
 from app.evaluation.repository import EvaluationRepository
 from app.evaluation.suite import EvaluationSuite
-from app.observability.model_usage import record_model_usage
+from app.observability.model_usage import ModelUsageEvent, record_model_usage
 from app.schemas.chat import ChatResponse, SourceSnippet
 
 
@@ -206,6 +207,44 @@ def test_runner_attaches_captured_usage_to_its_case(valid_dependencies: Dependen
         {"operation": "judge", "model": "test-judge", "prompt_tokens": 6, "completion_tokens": 2, "cache_hit_tokens": 0},
         {"operation": "judge", "model": "test-judge", "prompt_tokens": 6, "completion_tokens": 2, "cache_hit_tokens": 0},
     ]
+
+
+def test_runner_persists_model_usage_event_and_calculates_nonzero_cost(tmp_path: Path):
+    from app.evaluation.runner import EvaluationRunner
+
+    class UsageJudge(FakeJudge):
+        def complete_json(self, system_prompt, user_prompt):
+            payload = super().complete_json(system_prompt, user_prompt)
+            return JudgementCompletion(
+                payload,
+                ModelUsageEvent("judge", "test-judge", prompt_tokens=6, completion_tokens=2),
+            )
+
+    repository = EvaluationRepository(tmp_path / "eval.db")
+    runner = EvaluationRunner(
+        repository=repository,
+        chain_factory=FakeChain,
+        judge_factory=UsageJudge,
+        metric_names=("answer_correctness", "required_fact_coverage", "faithfulness"),
+        price_rates={
+            "input_cache_hit_per_million": "0",
+            "input_cache_miss_per_million": "1000",
+            "output_per_million": "1000",
+        },
+    )
+    suite = core_suite()
+    run_id = create_run(repository, suite)
+
+    detail = runner.run(run_id, suite, GateMode.CALIBRATION, Event())
+
+    persisted = repository.get_run(run_id)
+    assert detail.summary.status == RunStatus.COMPLETED
+    assert persisted is not None
+    assert persisted.summary.estimated_cost == 0.03
+    metric = next(metric for metric in persisted.case_results[0].turn_results[0].metric_results if metric.name == "answer_correctness")
+    assert metric.token_usage == {
+        "operation": "judge", "model": "test-judge", "prompt_tokens": 6, "completion_tokens": 2, "cache_hit_tokens": 0,
+    }
 
 
 def test_runner_uses_a_valid_approved_baseline(valid_dependencies: Dependencies):

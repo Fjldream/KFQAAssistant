@@ -188,6 +188,28 @@ def test_evaluate_case_keeps_non_hard_metric_failure_outside_case_gate():
     assert result.passed is True
 
 
+def test_evaluate_case_preserves_configured_metric_order_when_judge_is_unavailable():
+    chain = FakeChain([ChatResponse(answer="进入数采管理创建工程。", sources=[])])
+    case = EvaluationCase(
+        id="ordered-errors",
+        category="测试",
+        turns=[EvaluationTurn(question="如何创建工程？")],
+    )
+
+    result = evaluate_case(
+        chain,
+        case,
+        semantic_enabled=True,
+        metrics=("faithfulness", "required_fact_coverage", "answer_correctness"),
+    )
+
+    assert [metric.name for metric in result.turn_results[0].metric_results] == [
+        "faithfulness",
+        "required_fact_coverage",
+        "answer_correctness",
+    ]
+
+
 # 验证不应回答的问题必须拒答，并且不能返回资料来源。
 def test_evaluate_no_answer_case_requires_refusal_without_sources():
     chain = FakeChain(

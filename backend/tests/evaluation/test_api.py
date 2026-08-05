@@ -83,6 +83,9 @@ class FakeEvaluationService:
     def get_overview(self):
         return {"latest": self.runs["run-1"], "previous_run_id": None, "comparison": None}
 
+    def shutdown(self):
+        return None
+
     def save_case_results(self, *args, **kwargs):
         self.progressive_save_called = True
         raise AssertionError("progressive uploads must never save client scores")
@@ -97,6 +100,10 @@ def _summary(run_id: str, status: str) -> EvaluationRunSummary:
         pass_rate=1.0,
         p0_total=1,
         p0_passed=1,
+        suite_id="core",
+        suite_version="1.0.0",
+        suite_hash="suite-hash",
+        mode="calibration",
     )
 
 
@@ -119,15 +126,21 @@ def _detail(run_id: str, status: str) -> EvaluationRunDetail:
         passed=True,
         turn_results=[turn],
     )
-    return EvaluationRunDetail(summary=_summary(run_id, status), gate_result=GateResult(passed=True), case_results=[case])
+    return EvaluationRunDetail(
+        summary=_summary(run_id, status),
+        gate_result=GateResult(passed=True),
+        case_results=[case],
+        snapshot={"suite_id": "core", "suite_version": "1.0.0", "suite_hash": "suite-hash"},
+    )
 
 
 def _client(monkeypatch):
-    from app.api import routes_evaluation
+    from app.api.routes_evaluation import get_evaluation_service
 
     service = FakeEvaluationService()
-    monkeypatch.setattr(routes_evaluation, "create_evaluation_service", lambda: service)
-    return TestClient(create_app()), service
+    app = create_app()
+    app.dependency_overrides[get_evaluation_service] = lambda: service
+    return TestClient(app), service
 
 
 def test_evaluation_cases_endpoint(monkeypatch):
@@ -148,6 +161,10 @@ def test_create_run_returns_202_and_does_not_accept_case_results(monkeypatch):
     assert response.status_code == 202
     assert response.json()["run_id"] == "run-created"
     assert response.json()["status"] in {"created", "running"}
+    assert response.json()["suite_id"] == "core"
+    assert response.json()["suite_version"] == "1.0.0"
+    assert response.json()["suite_hash"] == "suite-hash"
+    assert response.json()["mode"] == "calibration"
     assert service.created[0][0] == "core"
 
     rejected = client.post(
@@ -183,6 +200,18 @@ def test_run_detail_missing_run_returns_stable_error(monkeypatch):
 
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "run_not_found"
+
+
+def test_run_detail_includes_persisted_suite_identity_and_snapshot(monkeypatch):
+    client, _ = _client(monkeypatch)
+
+    response = client.get("/api/evaluation/runs/run-1")
+
+    assert response.status_code == 200
+    assert response.json()["summary"]["suite_id"] == "core"
+    assert response.json()["summary"]["suite_version"] == "1.0.0"
+    assert response.json()["summary"]["mode"] == "calibration"
+    assert response.json()["snapshot"]["suite_hash"] == "suite-hash"
 
 
 def test_cancel_terminal_run_returns_stable_error(monkeypatch):
@@ -248,3 +277,17 @@ def test_run_list_limit_is_bounded(monkeypatch):
     response = client.get("/api/evaluation/runs?limit=101")
 
     assert response.status_code == 422
+
+
+def test_real_app_routes_evaluation_through_its_lifespan_service(monkeypatch):
+    service = FakeEvaluationService()
+    monkeypatch.setattr("app.evaluation.service.create_evaluation_service", lambda: service)
+    app = create_app()
+
+    with TestClient(app) as client:
+        assert app.state.evaluation_service is service
+        assert client.get("/api/evaluation/runs/run-1").status_code == 200
+        assert client.post("/api/evaluation/runs/run-active/cancel").status_code == 200
+        assert client.post("/api/evaluation/runs", json={"suite_id": "core", "mode": "calibration"}).status_code == 202
+
+    assert service.created[0][0] == "core"

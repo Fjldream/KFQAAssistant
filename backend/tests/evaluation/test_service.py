@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from app.evaluation.repository import EvaluationRepository
 from app.evaluation.models import GateMode
 from app.evaluation.models import CaseResult, TurnResult
@@ -139,6 +141,19 @@ def test_service_create_run_uses_trusted_coordinator_not_client_case_results(tmp
     assert service.cancel_run("trusted-run") is True
 
 
+def test_service_rejects_baseline_with_different_suite_version_or_hash(tmp_path: Path):
+    service = EvaluationService.__new__(EvaluationService)
+    repository = EvaluationRepository(tmp_path / "eval.db")
+    baseline = repository.create_run("core", "1.0.0", "baseline-hash", {}, "CALIBRATION", case_total=1)
+    with repository._connect() as connection:
+        connection.execute("UPDATE evaluation_runs SET status = 'completed' WHERE id = ?", (baseline,))
+    current = repository.create_run("core", "2.0.0", "current-hash", {}, "BLOCKING", case_total=1)
+    service.repository = repository
+
+    with pytest.raises(ValueError, match="suite_mismatch"):
+        service.compare_to_baseline(current, baseline)
+
+
 def test_trusted_service_default_metrics_complete_a_valid_run(tmp_path: Path, monkeypatch):
     import app.evaluation.service as service_module
 
@@ -188,6 +203,7 @@ def test_trusted_service_default_metrics_complete_a_valid_run(tmp_path: Path, mo
         semantic_enabled=True,
     )
     try:
+        assert {"hit_at_k", "recall_at_k", "mrr", "chunk_hit_at_k", "forbidden_source_matches"} <= set(service.metrics)
         run_id = service.create_run("trusted-core", GateMode.CALIBRATION)
         assert service.coordinator.wait_for_idle(timeout=2)
 
