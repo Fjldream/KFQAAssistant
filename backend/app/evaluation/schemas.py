@@ -1,9 +1,83 @@
-from pydantic import BaseModel, Field
+from enum import Enum
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class EvaluationRunMode(str, Enum):
+    CALIBRATION = "calibration"
+    BLOCKING = "blocking"
+
+
+class EvaluationRunStatus(str, Enum):
+    CREATED = "created"
+    RUNNING = "running"
+    SCORING = "scoring"
+    COMPLETED = "completed"
+    INVALID = "INVALID"
+    CANCELLED = "cancelled"
 
 
 class CreateEvaluationRunRequest(BaseModel):
-    include_dialogues: bool = True
-    include_load_test: bool = False
+    model_config = ConfigDict(extra="forbid")
+
+    suite_id: str = Field(min_length=1)
+    mode: EvaluationRunMode
+
+
+class ApproveBaselineRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    approved_by: str = Field(min_length=1, max_length=100)
+    note: str | None = Field(default=None, max_length=500)
+
+    @field_validator("approved_by")
+    @classmethod
+    def normalize_approved_by(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("approved_by must not be blank")
+        return value
+
+
+class EvaluationRunSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: str
+    status: EvaluationRunStatus
+    case_total: int
+    case_passed: int
+    pass_rate: float
+    p0_total: int
+    p0_passed: int
+    avg_latency_ms: float = 0.0
+    p95_latency_ms: float = 0.0
+    single_total: int = 0
+    single_passed: int = 0
+    dialogue_total: int = 0
+    dialogue_passed: int = 0
+    category_pass_rates: dict[str, float] = Field(default_factory=dict)
+    avg_faithfulness_score: float | None = None
+    knowledge_base_id: str | None = None
+    completed_count: int = 0
+    error_count: int = 0
+    judge_coverage: float = 0.0
+    missing_judge_metrics: list[str] = Field(default_factory=list)
+    avg_correctness_score: float | None = None
+    avg_fact_coverage_score: float | None = None
+    avg_retrieval_recall: float | None = None
+    avg_retrieval_mrr: float | None = None
+    single_p95_latency_ms: float = 0.0
+    dialogue_p95_latency_ms: float = 0.0
+    total_token_count: int = 0
+    estimated_cost: float = 0.0
+
+
+class BaselineApprovalResponse(BaseModel):
+    suite_id: str
+    run_id: str
+    approved_by: str | None = None
+    note: str | None = None
+    approved_at: str | None = None
 
 
 class RunEvaluationCaseRequest(BaseModel):

@@ -198,6 +198,22 @@ def test_repository_rejects_empty_run_and_approved_baselines_are_immutable(tmp_p
     assert repository.get_current_baseline("core") == run_id
 
 
+def test_repository_persists_and_lists_approved_baseline_note(tmp_path: Path):
+    repository = EvaluationRepository(tmp_path / "eval.db")
+    run_id = repository.create_run("core", "v1", "hash", {}, "CALIBRATION", case_total=1)
+
+    repository.approve_baseline(run_id, approved_by="release manager", note="known-good release")
+
+    baselines = repository.list_baselines()
+
+    assert len(baselines) == 1
+    assert baselines[0]["suite_id"] == "core"
+    assert baselines[0]["run_id"] == run_id
+    assert baselines[0]["approved_by"] == "release manager"
+    assert baselines[0]["note"] == "known-good release"
+    assert baselines[0]["approved_at"]
+
+
 def test_repository_invalidates_orphaned_active_run_on_initialize(tmp_path: Path):
     repository = EvaluationRepository(tmp_path / "eval.db")
     repository.initialize()

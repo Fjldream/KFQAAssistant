@@ -1,7 +1,6 @@
-from dataclasses import asdict
-
 from fastapi.testclient import TestClient
 
+from app.evaluation.coordinator import EvaluationRunConflict
 from app.evaluation.models import (
     CaseResult,
     ComparisonResult,
@@ -13,11 +12,19 @@ from app.evaluation.models import (
     TurnResult,
 )
 from app.main import create_app
-from app.rag.errors import LLMGenerationError
 
 
 class FakeEvaluationService:
-    # 返回固定用例列表，验证 API 层只做 HTTP 转换。
+    def __init__(self) -> None:
+        self.created: list[tuple[str, object]] = []
+        self.approvals: list[dict] = []
+        self.progressive_save_called = False
+        self.runs = {
+            "run-1": _detail("run-1", "completed"),
+            "run-active": _detail("run-active", "running"),
+            "run-invalid": _detail("run-invalid", "INVALID"),
+        }
+
     def list_cases(self):
         return [
             EvaluationCase(
@@ -29,52 +36,62 @@ class FakeEvaluationService:
             )
         ]
 
-    # 返回固定运行详情，验证创建评测接口的响应结构。
-    def run_evaluation(self, include_dialogues=True, include_load_test=False):
-        return _detail(run_id="run-1")
+    def create_run(self, suite_id, mode):
+        if suite_id == "busy":
+            raise EvaluationRunConflict("an evaluation run is already active")
+        if suite_id != "core":
+            raise ValueError("unknown evaluation suite")
+        self.created.append((suite_id, mode))
+        self.runs["run-created"] = _detail("run-created", "created")
+        return "run-created"
 
-    # 返回单条用例评测结果，验证前端逐条评测接口。
-    def run_case(self, case_id: str, include_dialogues=True):
-        assert case_id == "single.collect.create"
-        return _detail(run_id="run-1").case_results[0]
+    def cancel_run(self, run_id: str):
+        detail = self.runs.get(run_id)
+        if detail is None or detail.summary.status in {"completed", "INVALID", "cancelled"}:
+            return False
+        self.runs[run_id] = _detail(run_id, "cancelled")
+        return True
 
-    # 保存前端逐条评测完成后的结果，验证渐进式评测收口。
-    def save_case_results(self, case_results, config=None):
-        assert len(case_results) == 1
-        return _detail(run_id="run-progressive")
+    def approve_baseline(self, run_id: str, approved_by: str, note: str | None = None):
+        detail = self.runs.get(run_id)
+        if detail is None:
+            raise LookupError("run_not_found")
+        if detail.summary.status == "INVALID":
+            raise ValueError("run_invalid")
+        if detail.summary.status != "completed":
+            raise RuntimeError("run_not_terminal")
+        approval = {"suite_id": "core", "run_id": run_id, "approved_by": approved_by, "note": note}
+        self.approvals.append(approval)
+        return approval
 
-    # 测试假服务直接复用传入 payload，不关心转换细节。
-    def case_result_from_payload(self, payload):
-        return payload
+    def list_baselines(self):
+        return self.approvals
 
-    # 返回固定运行列表，验证列表接口。
-    def list_runs(self, limit=20):
-        return [_summary("run-1")]
-
-    # 返回固定运行详情，验证详情接口。
-    def get_run(self, run_id: str):
-        return _detail(run_id=run_id)
-
-    # 返回固定总览，验证总览接口。
-    def get_overview(self):
-        return {"latest": _detail("run-1"), "previous_run_id": None, "comparison": None}
-
-    # 返回固定对比结果，验证对比接口。
-    def compare_run(self, run_id: str, baseline_run_id=None):
+    def compare_to_baseline(self, run_id: str, baseline_run_id: str | None = None):
+        if run_id not in self.runs:
+            raise LookupError("run_not_found")
+        if not self.approvals:
+            return None
         return ComparisonResult(pass_rate_delta=0.1, recovered_case_ids=["case-1"])
 
+    def list_runs(self, limit=20):
+        return [detail.summary for detail in self.runs.values()][:limit]
 
-class FailingEvaluationService(FakeEvaluationService):
-    # 模拟模型服务不可用，验证评测路由不会把业务异常暴露成 500。
-    def run_evaluation(self, include_dialogues=True, include_load_test=False):
-        raise LLMGenerationError()
+    def get_run(self, run_id: str):
+        return self.runs.get(run_id)
+
+    def get_overview(self):
+        return {"latest": self.runs["run-1"], "previous_run_id": None, "comparison": None}
+
+    def save_case_results(self, *args, **kwargs):
+        self.progressive_save_called = True
+        raise AssertionError("progressive uploads must never save client scores")
 
 
-# 构造运行汇总，供假服务复用。
-def _summary(run_id: str) -> EvaluationRunSummary:
+def _summary(run_id: str, status: str) -> EvaluationRunSummary:
     return EvaluationRunSummary(
         run_id=run_id,
-        status="completed",
+        status=status,
         case_total=1,
         case_passed=1,
         pass_rate=1.0,
@@ -83,8 +100,7 @@ def _summary(run_id: str) -> EvaluationRunSummary:
     )
 
 
-# 构造完整运行详情，供假服务复用。
-def _detail(run_id: str) -> EvaluationRunDetail:
+def _detail(run_id: str, status: str) -> EvaluationRunDetail:
     turn = TurnResult(
         question="如何创建采集工程？",
         answer="点击新建工程。",
@@ -103,28 +119,19 @@ def _detail(run_id: str) -> EvaluationRunDetail:
         passed=True,
         turn_results=[turn],
     )
-    return EvaluationRunDetail(summary=_summary(run_id), gate_result=GateResult(passed=True), case_results=[case])
+    return EvaluationRunDetail(summary=_summary(run_id, status), gate_result=GateResult(passed=True), case_results=[case])
 
 
-# 构造带假评测服务的测试客户端。
 def _client(monkeypatch):
     from app.api import routes_evaluation
 
-    monkeypatch.setattr(routes_evaluation, "create_evaluation_service", lambda: FakeEvaluationService())
-    return TestClient(create_app())
+    service = FakeEvaluationService()
+    monkeypatch.setattr(routes_evaluation, "create_evaluation_service", lambda: service)
+    return TestClient(create_app()), service
 
 
-# 构造会在创建评测时失败的测试客户端。
-def _failing_client(monkeypatch):
-    from app.api import routes_evaluation
-
-    monkeypatch.setattr(routes_evaluation, "create_evaluation_service", lambda: FailingEvaluationService())
-    return TestClient(create_app())
-
-
-# 验证用例列表接口返回前端需要的统一结构。
 def test_evaluation_cases_endpoint(monkeypatch):
-    client = _client(monkeypatch)
+    client, _ = _client(monkeypatch)
 
     response = client.get("/api/evaluation/cases")
 
@@ -133,59 +140,102 @@ def test_evaluation_cases_endpoint(monkeypatch):
     assert response.json()[0]["case_type"] == "single"
 
 
-# 验证创建评测运行接口返回完整报告。
-def test_evaluation_create_run_endpoint(monkeypatch):
-    client = _client(monkeypatch)
+def test_create_run_returns_202_and_does_not_accept_case_results(monkeypatch):
+    client, service = _client(monkeypatch)
 
-    response = client.post("/api/evaluation/runs", json={"include_dialogues": True, "include_load_test": False})
+    response = client.post("/api/evaluation/runs", json={"suite_id": "core", "mode": "calibration"})
 
-    assert response.status_code == 200
-    assert response.json()["summary"]["run_id"] == "run-1"
-    assert response.json()["gate_result"]["passed"] is True
+    assert response.status_code == 202
+    assert response.json()["run_id"] == "run-created"
+    assert response.json()["status"] in {"created", "running"}
+    assert service.created[0][0] == "core"
 
-
-# 验证单条用例运行接口返回用例结果。
-def test_evaluation_run_single_case_endpoint(monkeypatch):
-    client = _client(monkeypatch)
-
-    response = client.post("/api/evaluation/cases/single.collect.create/run", json={"include_dialogues": True})
-
-    assert response.status_code == 200
-    assert response.json()["case_id"] == "single.collect.create"
-
-
-# 验证保存渐进式评测结果接口返回完整运行报告。
-def test_evaluation_save_progressive_run_endpoint(monkeypatch):
-    client = _client(monkeypatch)
-    case_payload = asdict(_detail("run-1").case_results[0])
-
-    response = client.post(
-        "/api/evaluation/runs/progressive",
-        json={"case_results": [case_payload], "config": {"mode": "progressive"}},
+    rejected = client.post(
+        "/api/evaluation/runs",
+        json={"suite_id": "core", "mode": "calibration", "case_results": []},
     )
+    assert rejected.status_code == 422
+
+
+def test_create_run_returns_stable_conflict(monkeypatch):
+    client, _ = _client(monkeypatch)
+
+    response = client.post("/api/evaluation/runs", json={"suite_id": "busy", "mode": "blocking"})
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "run_conflict"
+
+
+def test_cancel_run_returns_updated_summary(monkeypatch):
+    client, _ = _client(monkeypatch)
+
+    response = client.post("/api/evaluation/runs/run-active/cancel")
 
     assert response.status_code == 200
-    assert response.json()["summary"]["run_id"] == "run-progressive"
+    assert response.json()["run_id"] == "run-active"
+    assert response.json()["status"] == "cancelled"
 
 
-# 验证模型服务不可用时，评测接口返回用户可读错误而不是 500。
-def test_evaluation_create_run_returns_service_error(monkeypatch):
-    client = _failing_client(monkeypatch)
+def test_cancel_terminal_run_returns_stable_error(monkeypatch):
+    client, _ = _client(monkeypatch)
 
-    response = client.post("/api/evaluation/runs", json={"include_dialogues": True, "include_load_test": False})
+    response = client.post("/api/evaluation/runs/run-1/cancel")
 
-    assert response.status_code == 503
-    assert response.json()["detail"] == "大模型服务暂时不可用，请稍后重试。"
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "run_not_terminal"
 
 
-# 验证运行详情和对比接口可访问。
-def test_evaluation_detail_and_compare_endpoints(monkeypatch):
-    client = _client(monkeypatch)
+def test_approve_baseline_validates_approver_and_invalid_run(monkeypatch):
+    client, _ = _client(monkeypatch)
 
-    detail = client.get("/api/evaluation/runs/run-1")
-    comparison = client.get("/api/evaluation/runs/run-1/compare")
+    blank_approver = client.post("/api/evaluation/runs/run-1/approve-baseline", json={"approved_by": "   "})
+    invalid_run = client.post("/api/evaluation/runs/run-invalid/approve-baseline", json={"approved_by": "release"})
 
-    assert detail.status_code == 200
-    assert detail.json()["case_results"][0]["case_id"] == "single.collect.create"
-    assert comparison.status_code == 200
-    assert comparison.json()["recovered_case_ids"] == ["case-1"]
+    assert blank_approver.status_code == 422
+    assert invalid_run.status_code == 422
+    assert invalid_run.json()["detail"]["code"] == "run_invalid"
+
+
+def test_approve_baseline_persists_note_and_lists_immutable_approvals(monkeypatch):
+    client, service = _client(monkeypatch)
+
+    approval = client.post(
+        "/api/evaluation/runs/run-1/approve-baseline",
+        json={"approved_by": "  release manager  ", "note": "known-good release"},
+    )
+    baselines = client.get("/api/evaluation/baselines")
+
+    assert approval.status_code == 200
+    assert approval.json()["approved_by"] == "release manager"
+    assert approval.json()["note"] == "known-good release"
+    assert baselines.status_code == 200
+    assert baselines.json() == [approval.json()]
+    assert service.approvals[0]["note"] == "known-good release"
+
+
+def test_comparison_uses_approved_suite_baseline(monkeypatch):
+    client, _ = _client(monkeypatch)
+    client.post("/api/evaluation/runs/run-1/approve-baseline", json={"approved_by": "release"})
+
+    response = client.get("/api/evaluation/runs/run-active/compare")
+
+    assert response.status_code == 200
+    assert response.json()["recovered_case_ids"] == ["case-1"]
+
+
+def test_progressive_upload_is_gone_and_never_saves_client_scores(monkeypatch):
+    client, service = _client(monkeypatch)
+
+    response = client.post("/api/evaluation/runs/progressive", json={"case_results": [], "config": {}})
+
+    assert response.status_code == 410
+    assert response.json()["detail"]["code"] == "progressive_run_deprecated"
+    assert service.progressive_save_called is False
+
+
+def test_run_list_limit_is_bounded(monkeypatch):
+    client, _ = _client(monkeypatch)
+
+    response = client.get("/api/evaluation/runs?limit=101")
+
+    assert response.status_code == 422

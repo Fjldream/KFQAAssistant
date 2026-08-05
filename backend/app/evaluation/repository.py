@@ -122,6 +122,7 @@ class EvaluationRepository:
                     run_id TEXT NOT NULL UNIQUE,
                     approved_at TEXT NOT NULL,
                     approved_by TEXT,
+                    note TEXT,
                     FOREIGN KEY(run_id) REFERENCES evaluation_runs(id)
                 );
                 """
@@ -166,7 +167,12 @@ class EvaluationRepository:
             "completed_at": "TEXT",
             "process_owner": "TEXT",
         }
-        for table, columns in (("evaluation_turn_results", turn_columns), ("evaluation_runs", run_columns)):
+        baseline_columns = {"note": "TEXT"}
+        for table, columns in (
+            ("evaluation_turn_results", turn_columns),
+            ("evaluation_runs", run_columns),
+            ("evaluation_baselines", baseline_columns),
+        ):
             existing = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
             for column, decl in columns.items():
                 if column not in existing:
@@ -406,7 +412,7 @@ class EvaluationRepository:
             )
         return result.rowcount == 1
 
-    def approve_baseline(self, run_id: str, approved_by: str | None = None) -> None:
+    def approve_baseline(self, run_id: str, approved_by: str | None = None, note: str | None = None) -> None:
         self.initialize()
         with self._connect() as connection:
             row = connection.execute("SELECT suite_id FROM evaluation_runs WHERE id = ?", (run_id,)).fetchone()
@@ -416,9 +422,27 @@ class EvaluationRepository:
             if exists is not None:
                 raise ValueError("approved baseline is immutable")
             connection.execute(
-                "INSERT INTO evaluation_baselines (id, suite_id, run_id, approved_at, approved_by) VALUES (?, ?, ?, ?, ?)",
-                (f"baseline-{uuid4().hex}", row["suite_id"], run_id, datetime.now(timezone.utc).isoformat(), approved_by),
+                "INSERT INTO evaluation_baselines (id, suite_id, run_id, approved_at, approved_by, note) VALUES (?, ?, ?, ?, ?, ?)",
+                (f"baseline-{uuid4().hex}", row["suite_id"], run_id, datetime.now(timezone.utc).isoformat(), approved_by, note),
             )
+
+    def list_baselines(self) -> list[dict[str, str | None]]:
+        self.initialize()
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT suite_id, run_id, approved_at, approved_by, note FROM evaluation_baselines "
+                "ORDER BY approved_at DESC, rowid DESC"
+            ).fetchall()
+        return [
+            {
+                "suite_id": str(row["suite_id"]),
+                "run_id": str(row["run_id"]),
+                "approved_at": str(row["approved_at"]),
+                "approved_by": row["approved_by"],
+                "note": row["note"],
+            }
+            for row in rows
+        ]
 
     def get_current_baseline(self, suite_id: str) -> str | None:
         self.initialize()
@@ -434,6 +458,21 @@ class EvaluationRepository:
         with self._connect() as connection:
             row = connection.execute("SELECT suite_id FROM evaluation_runs WHERE id = ?", (run_id,)).fetchone()
         return str(row["suite_id"]) if row is not None and row["suite_id"] else None
+
+    def get_run_metadata(self, run_id: str) -> dict[str, str | int | None] | None:
+        self.initialize()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT suite_id, mode, status, gate_passed FROM evaluation_runs WHERE id = ?", (run_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "suite_id": row["suite_id"],
+            "mode": row["mode"],
+            "status": row["status"],
+            "gate_passed": row["gate_passed"],
+        }
 
     def _finish_run(
         self,

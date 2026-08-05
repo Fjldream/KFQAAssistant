@@ -87,14 +87,33 @@ class EvaluationService:
     def cancel_run(self, run_id: str) -> bool:
         return self.coordinator.cancel(run_id)
 
-    def approve_baseline(self, run_id: str, approved_by: str | None = None) -> None:
-        self.repository.approve_baseline(run_id, approved_by)
+    def approve_baseline(self, run_id: str, approved_by: str, note: str | None = None) -> dict[str, str | None]:
+        metadata = self.repository.get_run_metadata(run_id)
+        if metadata is None:
+            raise LookupError("run_not_found")
+        if str(metadata["status"]) == "INVALID":
+            raise ValueError("run_invalid")
+        if str(metadata["status"]) != "completed":
+            raise RuntimeError("run_not_terminal")
+        if str(metadata["mode"]) != GateMode.CALIBRATION.value:
+            raise ValueError("run_invalid")
+        self.repository.approve_baseline(run_id, approved_by, note)
+        return next(baseline for baseline in self.repository.list_baselines() if baseline["run_id"] == run_id)
 
-    def compare_to_baseline(self, run_id: str) -> ComparisonResult | None:
+    def list_baselines(self) -> list[dict[str, str | None]]:
+        return self.repository.list_baselines()
+
+    def compare_to_baseline(self, run_id: str, baseline_run_id: str | None = None) -> ComparisonResult | None:
         suite_id = self.repository.get_run_suite_id(run_id)
         if suite_id is None:
-            return None
-        baseline_id = self.repository.get_current_baseline(suite_id)
+            raise LookupError("run_not_found")
+        baseline_id = baseline_run_id or self.repository.get_current_baseline(suite_id)
+        if baseline_id is not None:
+            baseline_suite_id = self.repository.get_run_suite_id(baseline_id)
+            if baseline_suite_id is None:
+                raise LookupError("run_not_found")
+            if baseline_suite_id != suite_id:
+                raise ValueError("suite_mismatch")
         return self.compare_run(run_id, baseline_id) if baseline_id else None
 
     def shutdown(self) -> None:
